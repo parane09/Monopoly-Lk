@@ -178,6 +178,15 @@ typedef struct {
     int effect_percentage;
 } ActiveEvent;
 
+// Regional development tracking structure (NEW)
+typedef struct {
+    int is_active;
+    char event_name[50];
+    char region_name[50];      // Which region is affected
+    int rounds_remaining;
+    int effect_percentage;
+} RegionalDevelopment;
+
 // Active regulation tracking
 typedef struct {
     int is_active;
@@ -205,13 +214,13 @@ typedef struct {
     
     // Active economy events
     ActiveEvent national_event;
-    ActiveEvent regional_development;
+    RegionalDevelopment regional_development;
     ActiveRegulation government_regulation;
     MarketCondition market_boom;
     MarketCondition market_decline;
     
     // Current rates
-    int current_inflation_rate;    // -3 to 12 (percentage)
+    int current_inflation_rate;    // -3 to 12 (percesntage)
     int current_interest_rate;     // Base loan interest rate
     
 } GameState;
