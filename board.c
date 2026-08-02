@@ -899,6 +899,8 @@ void init_board_data() {
     property_array[prop_index].has_structural_damage = 0;
     property_array[prop_index].value_reduction = 0;
     prop_index++;
+
+    printf("total properties: d\n", prop_index);
     
     // Verify we have exactly 28 properties
     if (prop_index != MAX_PROPERTIES) {
@@ -906,7 +908,7 @@ void init_board_data() {
                MAX_PROPERTIES, prop_index);
     }
     
-    printf("Board and properties initialized successfully.\n");
+    
 }
 
 // ============================================

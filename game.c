@@ -14,8 +14,11 @@
 // ============================================
 // GAME INITIALIZATION
 // ============================================
+void init_board_data(); // board data initialization proptotype
 
 void init_game(GameState* game) {
+    // initialize the board with all the data
+    init_board_data();
     // Initialize round number
     game->round_number = 1;
     game->current_player_index = 0;
@@ -287,3 +290,4 @@ int calculate_net_worth(Player* player) {
     
     return net_worth;
 }
+
