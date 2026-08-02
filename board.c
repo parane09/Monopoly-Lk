@@ -900,7 +900,7 @@ void init_board_data() {
     property_array[prop_index].value_reduction = 0;
     prop_index++;
 
-    printf("total properties: d\n", prop_index);
+
     
     // Verify we have exactly 28 properties
     if (prop_index != MAX_PROPERTIES) {
