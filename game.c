@@ -15,6 +15,10 @@
 // GAME INITIALIZATION
 // ============================================
 void init_board_data(); // board data initialization proptotype
+int roll_dice();
+int move_player(Player* player, int dice_total);
+Square* get_square(int position);
+int check_game_over(GameState* game);
 
 void init_game(GameState* game) {
     // initialize the board with all the data
@@ -178,37 +182,34 @@ void run_game(GameState* game) {
     printf("Starting simulation...\n");
     printf("Maximum Rounds: %d\n\n", MAX_ROUNDS);
     
-    // This is a STUB - will be replaced with full implementation later
-    printf("=== GAME LOOP STUB ===\n");
-    printf("The game loop will be implemented here.\n");
-    printf("It will run for up to %d rounds.\n\n", MAX_ROUNDS);
-    
-    // TEMPORARY: Run 3 test rounds to show it works
+    // TEMPORARY: Run 3 test rounds with real functions
     for (int round = 1; round <= 3 && !game->is_game_over; round++) {
-        printf("Round %d (TEST MODE)\n", round);
+        printf("\n=== ROUND %d (TEST MODE) ===\n", round);
         
-        // Each player takes a turn
         for (int i = 0; i < MAX_PLAYERS; i++) {
             int player_idx = (game->starting_player_index + i) % MAX_PLAYERS;
             Player* player = &game->players[player_idx];
             
             if (!player->is_bankrupt) {
-                printf("  %s takes turn... (stub)\n", player->player_name);
+                printf("\n  %s's turn:\n", player->player_name);
                 
-                // Simulate player movement
-                int dice = (rand() % 6 + 1) + (rand() % 6 + 1);
+                // USE REAL FUNCTIONS
+                int dice = roll_dice();          // ← FROM board.c
                 printf("    Rolled: %d\n", dice);
                 
-                // Move player (simplified)
                 int old_pos = player->board_position;
-                player->board_position = (player->board_position + dice) % BOARD_SIZE;
-                printf("    Moved from square %d to square %d\n", old_pos, player->board_position);
+                int passed_go = move_player(player, dice);  // ← FROM board.c
                 
-                // Check if passed GO
-                if (player->board_position < old_pos) {
-                    player->cash += GO_BONUS;
+                printf("    Moved from square %d to square %d\n", 
+                       old_pos, player->board_position);
+                
+                if (passed_go) {
                     printf("    Passed GO! Collected LKR %d\n", GO_BONUS);
                 }
+                
+                // Simplified landing (will expand later)
+                Square* square = get_square(player->board_position);
+                printf("    Landed on: %s\n", square->square_name);
                 
                 printf("    Cash: LKR %d\n", player->cash);
             } else {
@@ -216,20 +217,14 @@ void run_game(GameState* game) {
             }
         }
         
-        // End of round
-        printf("  End of round %d\n\n", round);
+        printf("\n=== End of round %d ===\n", round);
+        
+        // End of round (placeholder)
+        if (check_game_over(game)) break;
     }
     
-    printf("=== END OF STUB ===\n");
-    printf("Game loop placeholder complete.\n");
-    printf("The full implementation will add:\n");
-    printf("  - Property purchase and rent\n");
-    printf("  - Loans and interest\n");
-    printf("  - Building construction\n");
-    printf("  - Insurance\n");
-    printf("  - Events and inflation\n");
-    printf("  - AI decision making\n");
-    printf("  - And much more...\n");
+    printf("\n=== TEST MODE COMPLETE ===\n");
+    printf("Full game loop will be implemented with finance.c\n");
 }
 
 // ============================================
