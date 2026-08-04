@@ -208,6 +208,8 @@ typedef struct {
     int round_number;
     int current_player_index;
     int starting_player_index;
+    // Stores player array indices in the order that players take their turns.
+    int turn_order[MAX_PLAYERS];
     int is_game_over;
     int winner_player_id;
     Player players[MAX_PLAYERS];

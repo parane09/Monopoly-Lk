@@ -20,6 +20,74 @@ int move_player(Player* player, int dice_total);
 Square* get_square(int position);
 int check_game_over(GameState* game);
 
+// Determines the order inside one tied group. Players who tie again keep
+// rolling until every position in this group has been decided.
+static void resolve_tied_player_order(GameState* game, int player_order[], int first_tied_position, int tied_player_count) {
+    int tie_break_rolls[MAX_PLAYERS];
+
+    if (tied_player_count <= 1) {
+        return;
+    }
+
+    printf("\nTie detected between: ");
+    for (int tied_offset = 0; tied_offset < tied_player_count; tied_offset++) {
+        int player_index = player_order[first_tied_position + tied_offset];
+        printf("%s", game->players[player_index].player_name);
+        if (tied_offset < tied_player_count - 1) {
+            printf(", ");
+        }
+    }
+    printf(". Rolling again...\n");
+
+    // Only the players in this tied group roll again.
+    for (int tied_offset = 0; tied_offset < tied_player_count; tied_offset++) {
+        int player_index = player_order[first_tied_position + tied_offset];
+        tie_break_rolls[tied_offset] = roll_dice();
+        printf("%s rolls %d.\n",
+               game->players[player_index].player_name,
+               tie_break_rolls[tied_offset]);
+    }
+
+    // Sort this tied group from the highest tie-break roll to the lowest.
+    for (int current_position = 0; current_position < tied_player_count - 1; current_position++) {
+        for (int comparison_position = current_position + 1;
+             comparison_position < tied_player_count;
+             comparison_position++) {
+            if (tie_break_rolls[comparison_position] > tie_break_rolls[current_position]) {
+                int temporary_roll = tie_break_rolls[current_position];
+                tie_break_rolls[current_position] = tie_break_rolls[comparison_position];
+                tie_break_rolls[comparison_position] = temporary_roll;
+
+                int temporary_player_index = player_order[first_tied_position + current_position];
+                player_order[first_tied_position + current_position] =
+                    player_order[first_tied_position + comparison_position];
+                player_order[first_tied_position + comparison_position] = temporary_player_index;
+            }
+        }
+    }
+
+    // Resolve any smaller groups that tied during this tie-break roll.
+    int tied_group_start = 0;
+    while (tied_group_start < tied_player_count) {
+        int tied_group_end = tied_group_start + 1;
+
+        while (tied_group_end < tied_player_count &&
+               tie_break_rolls[tied_group_end] == tie_break_rolls[tied_group_start]) {
+            tied_group_end++;
+        }
+
+        int remaining_tied_player_count = tied_group_end - tied_group_start;
+        if (remaining_tied_player_count > 1) {
+            resolve_tied_player_order(game,
+                                      player_order,
+                                      first_tied_position + tied_group_start,
+                                      remaining_tied_player_count);
+        }
+
+        tied_group_start = tied_group_end;
+    }
+}
+
 void init_game(GameState* game) {
     // initialize the board with all the data
     init_board_data();
@@ -27,6 +95,10 @@ void init_game(GameState* game) {
     game->round_number = 1;
     game->current_player_index = 0;
     game->starting_player_index = 0;
+    // Default order is replaced by the dice-based order in print_game_start().
+    for (int player_index = 0; player_index < MAX_PLAYERS; player_index++) {
+        game->turn_order[player_index] = player_index;
+    }
     game->is_game_over = 0;
     game->winner_player_id = -1;
     
@@ -141,33 +213,72 @@ void print_game_start(GameState* game) {
     // Simulate dice rolls to determine first player
     printf("Determining the First Player...\n");
     
-    int rolls[MAX_PLAYERS];
-    int highest_roll = 0;
-    int starting_player = 0;
+    int initial_rolls[MAX_PLAYERS];
     
     // Initial roll
-    for (int i = 0; i < MAX_PLAYERS; i++) {
-        // Simulate two dice (2-12 range)
-        rolls[i] = (rand() % 6 + 1) + (rand() % 6 + 1);
-        printf("%s rolls %d.\n", game->players[i].player_name, rolls[i]);
-        
-        if (rolls[i] > highest_roll) {
-            highest_roll = rolls[i];
-            starting_player = i;
+    for (int player_index = 0; player_index < MAX_PLAYERS; player_index++) {
+        initial_rolls[player_index] = roll_dice();
+        game->turn_order[player_index] = player_index;
+        printf("%s rolls %d.\n",
+               game->players[player_index].player_name,
+               initial_rolls[player_index]);
+    }
+
+    // Sort every player by the initial roll, from highest to lowest.
+    for (int current_position = 0; current_position < MAX_PLAYERS - 1; current_position++) {
+        for (int comparison_position = current_position + 1;
+             comparison_position < MAX_PLAYERS;
+             comparison_position++) {
+            int current_player_index = game->turn_order[current_position];
+            int comparison_player_index = game->turn_order[comparison_position];
+
+            if (initial_rolls[comparison_player_index] > initial_rolls[current_player_index]) {
+                int temporary_player_index = game->turn_order[current_position];
+                game->turn_order[current_position] = game->turn_order[comparison_position];
+                game->turn_order[comparison_position] = temporary_player_index;
+            }
         }
     }
-    
-    game->starting_player_index = starting_player;
-    game->current_player_index = starting_player;
-    
-    printf("\n%s will begin the game.\n", game->players[starting_player].player_name);
-    
-    // Print turn order (starting from the determined player)
+
+    // Reroll within every tied initial-roll group. A tie-break cannot move a
+    // player outside the ranking group established by the initial roll.
+    int tied_group_start = 0;
+    while (tied_group_start < MAX_PLAYERS) {
+        int tied_group_end = tied_group_start + 1;
+        int first_player_in_group = game->turn_order[tied_group_start];
+
+        while (tied_group_end < MAX_PLAYERS) {
+            int next_player_in_group = game->turn_order[tied_group_end];
+            if (initial_rolls[next_player_in_group] != initial_rolls[first_player_in_group]) {
+                break;
+            }
+            tied_group_end++;
+        }
+
+        int tied_player_count = tied_group_end - tied_group_start;
+        if (tied_player_count > 1) {
+            resolve_tied_player_order(game,
+                                      game->turn_order,
+                                      tied_group_start,
+                                      tied_player_count);
+        }
+
+        tied_group_start = tied_group_end;
+    }
+
+    // The first entry is retained for code that needs the starting player.
+    game->starting_player_index = game->turn_order[0];
+    game->current_player_index = game->turn_order[0];
+
+    printf("\n%s will begin the game.\n",
+           game->players[game->starting_player_index].player_name);
+
+    // Print the complete dice-ranked turn order.
     printf("\nTurn order: ");
-    for (int i = 0; i < MAX_PLAYERS; i++) {
-        int player_index = (starting_player + i) % MAX_PLAYERS;
+    for (int turn_position = 0; turn_position < MAX_PLAYERS; turn_position++) {
+        int player_index = game->turn_order[turn_position];
         printf("%s", game->players[player_index].player_name);
-        if (i < MAX_PLAYERS - 1) {
+        if (turn_position < MAX_PLAYERS - 1) {
             printf(", ");
         }
     }
@@ -186,9 +297,12 @@ void run_game(GameState* game) {
     for (int round = 1; round <= 3 && !game->is_game_over; round++) {
         printf("\n=== ROUND %d (TEST MODE) ===\n", round);
         
-        for (int i = 0; i < MAX_PLAYERS; i++) {
-            int player_idx = (game->starting_player_index + i) % MAX_PLAYERS;
-            Player* player = &game->players[player_idx];
+        // Follow the complete dice-ranked order instead of wrapping around
+        // from only the highest roller's player-array index.
+        for (int turn_position = 0; turn_position < MAX_PLAYERS; turn_position++) {
+            int player_index = game->turn_order[turn_position];
+            game->current_player_index = player_index;
+            Player* player = &game->players[player_index];
             
             if (!player->is_bankrupt) {
                 printf("\n  %s's turn:\n", player->player_name);
