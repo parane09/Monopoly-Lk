@@ -915,8 +915,15 @@ void init_board_data() {
 // DICE ROLLING FUNCTION
 // ============================================
 
-int roll_dice() {
-    return (rand() % 6 + 1) + (rand() % 6 + 1);
+DiceRoll roll_dice(void) {
+    DiceRoll dice_roll;
+
+    dice_roll.first_die = rand() % 6 + 1;
+    dice_roll.second_die = rand() % 6 + 1;
+    dice_roll.total = dice_roll.first_die + dice_roll.second_die;
+    dice_roll.is_double = dice_roll.first_die == dice_roll.second_die;
+
+    return dice_roll;
 }
 
 // ============================================

@@ -75,6 +75,15 @@ typedef enum {
     INSURANCE_BUSINESS 
 } InsurancePolicy;
 
+// Stores the complete result of rolling two dice. Keeping the individual
+// values makes doubles available for jail and consecutive-doubles rules.
+typedef struct {
+    int first_die;
+    int second_die;
+    int total;
+    int is_double;
+} DiceRoll;
+
 // ============================================
 // STRUCTS
 // ============================================

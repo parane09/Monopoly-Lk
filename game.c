@@ -15,7 +15,7 @@
 // GAME INITIALIZATION
 // ============================================
 void init_board_data(); // board data initialization proptotype
-int roll_dice();
+DiceRoll roll_dice(void);
 int move_player(Player* player, int dice_total);
 Square* get_square(int position);
 int check_game_over(GameState* game);
@@ -158,17 +158,17 @@ void print_game_start(GameState* game) {
 
         for (int tied_position = 0; tied_position < tied_player_count; tied_position++) {
             int player_index = players_still_tied[tied_position];
-            int player_roll = roll_dice();
+            DiceRoll player_dice_roll = roll_dice();
 
             printf("%s rolls %d.\n",
                    game->players[player_index].player_name,
-                   player_roll);
+                   player_dice_roll.total);
 
-            if (player_roll > highest_roll) {
-                highest_roll = player_roll;
+            if (player_dice_roll.total > highest_roll) {
+                highest_roll = player_dice_roll.total;
                 next_tied_players[0] = player_index;
                 next_tied_player_count = 1;
-            } else if (player_roll == highest_roll) {
+            } else if (player_dice_roll.total == highest_roll) {
                 next_tied_players[next_tied_player_count] = player_index;
                 next_tied_player_count++;
             }
@@ -223,11 +223,11 @@ void run_game(GameState* game) {
                 printf("\n  %s's turn:\n", player->player_name);
                 
                 // USE REAL FUNCTIONS
-                int dice = roll_dice();          // ← FROM board.c
-                printf("    Rolled: %d\n", dice);
+                DiceRoll dice_roll = roll_dice();
+                printf("    Rolled: %d\n", dice_roll.total);
                 
                 int old_pos = player->board_position;
-                int passed_go = move_player(player, dice);  // ← FROM board.c
+                int passed_go = move_player(player, dice_roll.total);
                 
                 printf("    Moved from square %d to square %d\n", 
                        old_pos, player->board_position);
