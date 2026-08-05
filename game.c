@@ -14,11 +14,14 @@
 // ============================================
 // GAME INITIALIZATION
 // ============================================
-void init_board_data(); // board data initialization proptotype
+
+// function prototypes
+void init_board_data(); 
 DiceRoll roll_dice(void);
 int move_player(Player* player, int dice_total);
 Square* get_square(int position);
 int check_game_over(GameState* game);
+int determine_order(GameState* game);
 
 void init_game(GameState* game) {
     // initialize the board with all the data
@@ -140,56 +143,12 @@ void print_game_start(GameState* game) {
     
     // Simulate dice rolls to determine first player
     printf("Determining the First Player...\n");
-    
-    int players_still_tied[MAX_PLAYERS];
-    int tied_player_count = MAX_PLAYERS;
 
-    // All players are candidates during the first roll.
-    for (int player_index = 0; player_index < MAX_PLAYERS; player_index++) {
-        players_still_tied[player_index] = player_index;
-    }
 
-    // Keep rerolling only the players tied for the highest roll. Once one
-    // player remains, that player starts and normal clockwise order follows.
-    while (tied_player_count > 1) {
-        int highest_roll = 0;
-        int next_tied_players[MAX_PLAYERS];
-        int next_tied_player_count = 0;
-
-        for (int tied_position = 0; tied_position < tied_player_count; tied_position++) {
-            int player_index = players_still_tied[tied_position];
-            DiceRoll player_dice_roll = roll_dice();
-
-            printf("%s rolls %d.\n",
-                   game->players[player_index].player_name,
-                   player_dice_roll.total);
-
-            if (player_dice_roll.total > highest_roll) {
-                highest_roll = player_dice_roll.total;
-                next_tied_players[0] = player_index;
-                next_tied_player_count = 1;
-            } else if (player_dice_roll.total == highest_roll) {
-                next_tied_players[next_tied_player_count] = player_index;
-                next_tied_player_count++;
-            }
-        }
-
-        tied_player_count = next_tied_player_count;
-        for (int tied_position = 0; tied_position < tied_player_count; tied_position++) {
-            players_still_tied[tied_position] = next_tied_players[tied_position];
-        }
-
-        if (tied_player_count > 1) {
-            printf("Highest roll is tied. The tied players roll again.\n");
-        }
-    }
-
-    game->starting_player_index = players_still_tied[0];
+    game->starting_player_index = determine_order(game);
     game->current_player_index = game->starting_player_index;
 
-    printf(-
-        []"\n%s will begin the game.\n",
-           game->players[game->starting_player_index].player_name);
+    printf("%s will begin the game\n",game->players[game->starting_player_index].player_name);
 
     // After the highest roller starts, play proceeds clockwise through the
     // fixed player array as demonstrated in the assignment brief.
@@ -314,5 +273,39 @@ int calculate_net_worth(Player* player) {
     }
     
     return net_worth;
+}
+
+int determine_order(GameState* game){
+    int players[MAX_PLAYERS] = {0, 1, 2, 3};
+    int count = 4;
+
+    while (count > 1) {
+        int highest = 0;
+        int next_players[4];
+        int next_count = 0;
+        
+        for (int i = 0; i < count; i++) {
+            DiceRoll roll = roll_dice();
+            int player_index = players[i];
+            printf("%s rolled %d\n", game->players[player_index].player_name, roll.total);
+            if (roll.total > highest) {
+                highest = roll.total;
+                next_players[0] = players[i];
+                next_count = 1;
+            } else if (roll.total == highest) {
+                next_players[next_count++] = players[i];
+            }
+        }
+        // Only tied players continue
+        for (int i = 0; i < next_count; i++) {
+            players[i] = next_players[i];
+        }
+        count = next_count;
+        
+        if (count > 1) {
+            printf("Tie! Rolling again...\n");
+        }
+    }
+    return players[0];
 }
 
