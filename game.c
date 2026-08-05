@@ -187,7 +187,8 @@ void print_game_start(GameState* game) {
     game->starting_player_index = players_still_tied[0];
     game->current_player_index = game->starting_player_index;
 
-    printf("\n%s will begin the game.\n",
+    printf(-
+        []"\n%s will begin the game.\n",
            game->players[game->starting_player_index].player_name);
 
     // After the highest roller starts, play proceeds clockwise through the
