@@ -168,51 +168,7 @@ void print_game_start(GameState* game) {
 void run_game(GameState* game) {
     printf("Starting simulation...\n");
     printf("Maximum Rounds: %d\n\n", MAX_ROUNDS);
-    /*
-    // TEMPORARY: Run 3 test rounds with real functions
-    for (int round = 1; round <= 3 && !game->is_game_over; round++) {
-        printf("\n=== ROUND %d (TEST MODE) ===\n", round);
-        
-        // Start with the highest roller and proceed clockwise each round.
-        for (int turn_position = 0; turn_position < MAX_PLAYERS; turn_position++) {
-            int player_index =
-                (game->starting_player_index + turn_position) % MAX_PLAYERS;
-            game->current_player_index = player_index;
-            Player* player = &game->players[player_index];
-            
-            if (!player->is_bankrupt) {
-                printf("\n  %s's turn:\n", player->player_name);
-                
-                // USE REAL FUNCTIONS
-                DiceRoll dice_roll = roll_dice();
-                printf("    Rolled: %d\n", dice_roll.total);
-                
-                int old_pos = player->board_position;
-                int passed_go = move_player(player, dice_roll.total);
-                
-                printf("    Moved from square %d to square %d\n", 
-                       old_pos, player->board_position);
-                
-                if (passed_go) {
-                    printf("    Passed GO! Collected LKR %d\n", GO_BONUS);
-                }
-                
-                // Simplified landing (will expand later)
-                Square* square = get_square(player->board_position);
-                printf("    Landed on: %s\n", square->square_name);
-                
-                printf("    Cash: LKR %d\n", player->cash);
-            } else {
-                printf("  %s is bankrupt - skipping\n", player->player_name);
-            }
-        }
-        
-        printf("\n=== End of round %d ===\n", round);
-        
-        // End of round (placeholder)
-        if (check_game_over(game)) break;
-    }
-    */
+
     for(int round = 0; round<4 && !game->is_game_over; round++){
         printf("\n========== ROUND %d (TEST MODE) ==========\n", round);
         for(int i =0; i<MAX_PLAYERS; i++){
