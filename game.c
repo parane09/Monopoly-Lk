@@ -21,7 +21,8 @@ DiceRoll roll_dice(void);
 int move_player(Player* player, int dice_total);
 Square* get_square(int position);
 int check_game_over(GameState* game);
-int determine_order(GameState* game);
+int determine_first_player(GameState* game);
+void process_turn(GameState* game, Player* player);
 
 void init_game(GameState* game) {
     // initialize the board with all the data
@@ -145,7 +146,7 @@ void print_game_start(GameState* game) {
     printf("Determining the First Player...\n");
 
 
-    game->starting_player_index = determine_order(game);
+    game->starting_player_index = determine_first_player(game);
     game->current_player_index = game->starting_player_index;
 
     printf("%s will begin the game\n",game->players[game->starting_player_index].player_name);
@@ -167,7 +168,7 @@ void print_game_start(GameState* game) {
 void run_game(GameState* game) {
     printf("Starting simulation...\n");
     printf("Maximum Rounds: %d\n\n", MAX_ROUNDS);
-    
+    /*
     // TEMPORARY: Run 3 test rounds with real functions
     for (int round = 1; round <= 3 && !game->is_game_over; round++) {
         printf("\n=== ROUND %d (TEST MODE) ===\n", round);
@@ -211,7 +212,25 @@ void run_game(GameState* game) {
         // End of round (placeholder)
         if (check_game_over(game)) break;
     }
-    
+    */
+    for(int round = 0; round<4 && !game->is_game_over; round++){
+        printf("\n========== ROUND %d (TEST MODE) ==========\n", round);
+        for(int i =0; i<MAX_PLAYERS; i++){
+            int player_idx = (game->starting_player_index + i) % MAX_PLAYERS;
+            Player* player = &game->players[player_idx];
+            if(!player->is_bankrupt){
+                process_turn(game,player);
+            }
+            else{
+                printf("  %s is bankrupt - skipping\n", player->player_name);
+            }
+        }
+        /*
+        if(check_game_over){
+            break;
+        }
+            */
+    }
     printf("\n=== TEST MODE COMPLETE ===\n");
     printf("Full game loop will be implemented with finance.c\n");
 }
@@ -275,7 +294,7 @@ int calculate_net_worth(Player* player) {
     return net_worth;
 }
 
-int determine_order(GameState* game){
+int determine_first_player(GameState* game){
     int players[MAX_PLAYERS] = {0, 1, 2, 3};
     int count = 4;
 
@@ -307,5 +326,26 @@ int determine_order(GameState* game){
         }
     }
     return players[0];
+}
+
+void process_turn(GameState* game, Player* player){
+    printf("\n  %s's turn:\n", player->player_name);
+
+    DiceRoll diceroll = roll_dice();
+    printf("    Rolled: %d\n", diceroll.total);
+
+    int old_position = player->board_position;
+    int passed_go = move_player(player, diceroll.total);
+
+    printf("    Moved from square %d to square %d\n",
+           old_position, player->board_position);
+
+    if(passed_go){
+        printf("    Passed GO! Collected LKR %d\n", GO_BONUS);
+    }
+
+    Square* square = get_square(player->board_position);
+    printf("    Landed on: %s\n", square->square_name);
+    printf("    Cash: LKR %d\n", player->cash);
 }
 

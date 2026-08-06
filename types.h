@@ -242,4 +242,8 @@ typedef struct {
 extern Square board_array[BOARD_SIZE];
 extern Property property_array[MAX_PROPERTIES];
 
+//function prototypes
+void process_turn(GameState* game, Player* player);
+
 #endif // TYPES_H
+
