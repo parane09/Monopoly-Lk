@@ -110,8 +110,8 @@ void init_board_data() {
     
     property_array[prop_index].color_group = GROUP_RAILWAY;
     strcpy(property_array[prop_index].property_name, "Colombo Fort Railway Station");
-    property_array[prop_index].purchase_price = 20000;
-    property_array[prop_index].mortgage_value = 10000;
+    property_array[prop_index].purchase_price = 1500;
+    property_array[prop_index].mortgage_value = 750;
     property_array[prop_index].base_rent = 250;
     property_array[prop_index].house_construction_cost = 0;
     property_array[prop_index].hotel_construction_cost = 0;
@@ -266,8 +266,8 @@ void init_board_data() {
     
     property_array[prop_index].color_group = GROUP_UTILITY;
     strcpy(property_array[prop_index].property_name, "Ceylon Electricity Board");
-    property_array[prop_index].purchase_price = 15000;
-    property_array[prop_index].mortgage_value = 7500;
+    property_array[prop_index].purchase_price = 1500;
+    property_array[prop_index].mortgage_value = 750;
     property_array[prop_index].base_rent = 0;           // Calculated from dice
     property_array[prop_index].house_construction_cost = 0;
     property_array[prop_index].hotel_construction_cost = 0;
@@ -350,8 +350,8 @@ void init_board_data() {
     
     property_array[prop_index].color_group = GROUP_RAILWAY;
     strcpy(property_array[prop_index].property_name, "Kandy Railway Station");
-    property_array[prop_index].purchase_price = 20000;
-    property_array[prop_index].mortgage_value = 10000;
+    property_array[prop_index].purchase_price = 1500;
+    property_array[prop_index].mortgage_value = 750;
     property_array[prop_index].base_rent = 250;        // Will multiply based on owned
     property_array[prop_index].house_construction_cost = 0;
     property_array[prop_index].hotel_construction_cost = 0;
@@ -570,8 +570,8 @@ void init_board_data() {
     
     property_array[prop_index].color_group = GROUP_RAILWAY;
     strcpy(property_array[prop_index].property_name, "Galle Railway Station");
-    property_array[prop_index].purchase_price = 20000;
-    property_array[prop_index].mortgage_value = 10000;
+    property_array[prop_index].purchase_price = 1500;
+    property_array[prop_index].mortgage_value = 750;
     property_array[prop_index].base_rent = 250;
     property_array[prop_index].house_construction_cost = 0;
     property_array[prop_index].hotel_construction_cost = 0;
@@ -654,8 +654,8 @@ void init_board_data() {
     
     property_array[prop_index].color_group = GROUP_UTILITY;
     strcpy(property_array[prop_index].property_name, "National Water Supply and Drainage Board");
-    property_array[prop_index].purchase_price = 15000;
-    property_array[prop_index].mortgage_value = 7500;
+    property_array[prop_index].purchase_price = 1500;
+    property_array[prop_index].mortgage_value = 750;
     property_array[prop_index].base_rent = 0;           // Calculated from dice
     property_array[prop_index].house_construction_cost = 0;
     property_array[prop_index].hotel_construction_cost = 0;
@@ -810,8 +810,8 @@ void init_board_data() {
     
     property_array[prop_index].color_group = GROUP_RAILWAY;
     strcpy(property_array[prop_index].property_name, "Jaffna Railway Station");
-    property_array[prop_index].purchase_price = 20000;
-    property_array[prop_index].mortgage_value = 10000;
+    property_array[prop_index].purchase_price = 1500;
+    property_array[prop_index].mortgage_value = 750;
     property_array[prop_index].base_rent = 250;
     property_array[prop_index].house_construction_cost = 0;
     property_array[prop_index].hotel_construction_cost = 0;
