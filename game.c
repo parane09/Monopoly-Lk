@@ -169,7 +169,8 @@ void run_game(GameState* game) {
     printf("Starting simulation...\n");
     printf("Maximum Rounds: %d\n\n", MAX_ROUNDS);
 
-    for(int round = 0; round<4 && !game->is_game_over; round++){
+
+    for(int round = 0; round<3 && !game->is_game_over; round++){
         printf("\n========== ROUND %d (TEST MODE) ==========\n", round);
         for(int i =0; i<MAX_PLAYERS; i++){
             int player_idx = (game->starting_player_index + i) % MAX_PLAYERS;
@@ -181,11 +182,7 @@ void run_game(GameState* game) {
                 printf("  %s is bankrupt - skipping\n", player->player_name);
             }
         }
-        /*
-        if(check_game_over){
-            break;
-        }
-            */
+
     }
     printf("\n=== TEST MODE COMPLETE ===\n");
     printf("Full game loop will be implemented with finance.c\n");

@@ -243,7 +243,17 @@ extern Square board_array[BOARD_SIZE];
 extern Property property_array[MAX_PROPERTIES];
 
 //function prototypes
+
+//prototypes from game.c
 void process_turn(GameState* game, Player* player);
+
+//prototypes from finance.c
+int get_property_value(Property* prop);
+int get_total_mortgage_value(Player* player);
+int has_monopoly(Player* player, PropertyGroup group);
+int get_min_buildings_in_group(Player* player, PropertyGroup group);
+int get_building_cost(Property* prop);
+void print_player_finance(Player* player);
 
 #endif // TYPES_H
 

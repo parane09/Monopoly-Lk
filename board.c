@@ -1004,23 +1004,6 @@ SquareType get_square_type(int position) {
     return square->square_type;
 }
 
-// Check if a player owns all properties in a color group
-int has_monopoly(Player* player, PropertyGroup group) {
-    int owned_in_group = 0;
-    int total_in_group = 0;
-    
-    for (int i = 0; i < MAX_PROPERTIES; i++) {
-        if (property_array[i].color_group == group) {
-            total_in_group++;
-            if (property_array[i].owner_id == player->player_id) {
-                owned_in_group++;
-            }
-        }
-    }
-    
-    return (owned_in_group == total_in_group && total_in_group > 0);
-}
-
 // Get the number of properties a player owns in a group
 int count_properties_in_group(Player* player, PropertyGroup group) {
     int count = 0;
