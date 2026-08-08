@@ -169,7 +169,25 @@ void run_game(GameState* game) {
     printf("Starting simulation...\n");
     printf("Maximum Rounds: %d\n\n", MAX_ROUNDS);
 
+    int rounds = 0;
+    while(rounds<3 && !game->is_game_over){
+        printf("\n========== Turn %d (TEST MODE) ==========\n", rounds);
+        for(int i =0; i<MAX_PLAYERS; i++){
+            int player_idx = (game->starting_player_index + i) % MAX_PLAYERS;
+            Player* player = &game->players[player_idx];
+            if(!player->is_bankrupt){
+                process_turn(game,player);
+            }
+            else{
+                printf("  %s is bankrupt - skipping\n", player->player_name);
+            }
+        }
+        printf("=============end of turn=========================");
+        rounds = rounds + 1;
 
+    }
+
+/*
     for(int round = 0; round<3 && !game->is_game_over; round++){
         printf("\n========== ROUND %d (TEST MODE) ==========\n", round);
         for(int i =0; i<MAX_PLAYERS; i++){
@@ -186,7 +204,9 @@ void run_game(GameState* game) {
     }
     printf("\n=== TEST MODE COMPLETE ===\n");
     printf("Full game loop will be implemented with finance.c\n");
+    */
 }
+
 
 // ============================================
 // HELPER FUNCTIONS (Will be expanded later)
@@ -301,4 +321,3 @@ void process_turn(GameState* game, Player* player){
     printf("    Landed on: %s\n", square->square_name);
     printf("    Cash: LKR %d\n", player->cash);
 }
-
