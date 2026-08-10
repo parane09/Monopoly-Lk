@@ -653,3 +653,338 @@ void print_player_insurance(Player* player) {
     }
     printf("===============================\n");
 }
+
+
+// ============================================
+// BUILDING SYSTEM
+// ============================================
+
+// Check if a player can build a house on a property
+// Returns: 1 = can build, 0 = cannot build
+int can_build_house(Player* player, int property_index) {
+    if (player == NULL) return 0;
+    if (property_index < 0 || property_index >= MAX_PROPERTIES) return 0;
+    
+    Property* prop = &property_array[property_index];
+    
+    // Check if player owns the property
+    if (prop->owner_id != player->player_id) {
+        printf("  %s does not own %s!\n", player->player_name, prop->property_name);
+        return 0;
+    }
+    
+    // Check if property already has a hotel (building_count == 5)
+    if (prop->building_count == 5) {
+        printf("  %s already has a hotel. Cannot build more.\n", prop->property_name);
+        return 0;
+    }
+    
+    // Check if property already has 4 houses
+    if (prop->building_count == 4) {
+        printf("  %s has 4 houses. Upgrade to hotel instead.\n", prop->property_name);
+        return 0;
+    }
+    
+    // Check if player has a monopoly on this property's color group
+    if (!has_monopoly(player, prop->color_group)) {
+        printf("  %s does not have a monopoly on this color group.\n", player->player_name);
+        return 0;
+    }
+    
+    // Check if player has enough cash
+    int cost = prop->house_construction_cost;
+    if (player->cash < cost) {
+        printf("  Insufficient funds! House cost: LKR %d, Available: LKR %d\n", 
+               cost, player->cash);
+        return 0;
+    }
+    
+    // Check even building rule: cannot exceed other properties in group by more than 1
+    int min_buildings = get_min_buildings_in_group(player, prop->color_group);
+    if (min_buildings == -1) {
+        // No other properties in group? Shouldn't happen if has_monopoly is true
+        return 1;  // Can build if it's the only property in group
+    }
+    
+    // Get current building count of this property
+    int current_buildings = prop->building_count;
+    
+    // Get the minimum building count in the group
+    int min_count = 999;
+    for (int i = 0; i < MAX_PROPERTIES; i++) {
+        if (property_array[i].color_group == prop->color_group && 
+            property_array[i].owner_id == player->player_id) {
+            if (property_array[i].building_count < min_count) {
+                min_count = property_array[i].building_count;
+            }
+        }
+    }
+    
+    // Cannot build if this property has more buildings than the minimum
+    if (current_buildings > min_count) {
+        printf("  Even building rule: %s has %d houses, but another property has only %d.\n",
+               prop->property_name, current_buildings, min_count);
+        return 0;
+    }
+    
+    return 1;
+}
+
+// Build a house on a property
+// Returns: 1 = success, 0 = failure
+int build_house(Player* player, int property_index) {
+    if (player == NULL) return 0;
+    if (property_index < 0 || property_index >= MAX_PROPERTIES) return 0;
+    
+    // Check if can build
+    if (!can_build_house(player, property_index)) {
+        return 0;
+    }
+    
+    Property* prop = &property_array[property_index];
+    int cost = prop->house_construction_cost;
+    
+    // Deduct cost
+    player->cash -= cost;
+    
+    // Add house
+    prop->building_count++;
+    
+    // Reset condition to 100%
+    prop->condition_percentage = 100;
+    prop->rounds_since_maintenance = 0;
+    
+    printf("  %s constructed a house on %s. (Cost: LKR %d, Houses: %d)\n",
+           player->player_name, prop->property_name, cost, prop->building_count);
+    
+    return 1;
+}
+
+// Check if a player can build a hotel on a property
+// Returns: 1 = can build, 0 = cannot build
+int can_build_hotel(Player* player, int property_index) {
+    if (player == NULL) return 0;
+    if (property_index < 0 || property_index >= MAX_PROPERTIES) return 0;
+    
+    Property* prop = &property_array[property_index];
+    
+    // Check if player owns the property
+    if (prop->owner_id != player->player_id) {
+        printf("  %s does not own %s!\n", player->player_name, prop->property_name);
+        return 0;
+    }
+    
+    // Check if property already has a hotel
+    if (prop->building_count == 5) {
+        printf("  %s already has a hotel.\n", prop->property_name);
+        return 0;
+    }
+    
+    // Check if property has 4 houses
+    if (prop->building_count != 4) {
+        printf("  %s needs 4 houses before building a hotel. Currently: %d\n",
+               prop->property_name, prop->building_count);
+        return 0;
+    }
+    
+    // Check if player has a monopoly on this property's color group
+    if (!has_monopoly(player, prop->color_group)) {
+        printf("  %s does not have a monopoly on this color group.\n", player->player_name);
+        return 0;
+    }
+    
+    // Check if player has enough cash
+    int cost = prop->hotel_construction_cost;
+    if (player->cash < cost) {
+        printf("  Insufficient funds! Hotel cost: LKR %d, Available: LKR %d\n", 
+               cost, player->cash);
+        return 0;
+    }
+    
+    // Check even building rule: all properties in group must have 4 houses
+    for (int i = 0; i < MAX_PROPERTIES; i++) {
+        if (property_array[i].color_group == prop->color_group && 
+            property_array[i].owner_id == player->player_id) {
+            if (property_array[i].building_count != 4) {
+                printf("  Even building rule: %s has %d houses, but %s has %d.\n",
+                       prop->property_name, prop->building_count,
+                       property_array[i].property_name,
+                       property_array[i].building_count);
+                return 0;
+            }
+        }
+    }
+    
+    return 1;
+}
+
+// Build a hotel on a property (upgrade from 4 houses)
+// Returns: 1 = success, 0 = failure
+int build_hotel(Player* player, int property_index) {
+    if (player == NULL) return 0;
+    if (property_index < 0 || property_index >= MAX_PROPERTIES) return 0;
+    
+    // Check if can build hotel
+    if (!can_build_hotel(player, property_index)) {
+        return 0;
+    }
+    
+    Property* prop = &property_array[property_index];
+    int cost = prop->hotel_construction_cost;
+    
+    // Deduct cost
+    player->cash -= cost;
+    
+    // Upgrade to hotel (building_count = 5)
+    prop->building_count = 5;
+    
+    // Reset condition to 100%
+    prop->condition_percentage = 100;
+    prop->rounds_since_maintenance = 0;
+    
+    printf("  %s upgraded %s to a HOTEL! (Cost: LKR %d)\n",
+           player->player_name, prop->property_name, cost);
+    
+    return 1;
+}
+
+// Calculate rent for a property including building multipliers
+// Returns: Rent amount in LKR
+int calculate_rent_with_buildings(Property* prop) {
+    if (prop == NULL) return 0;
+    
+    int base_rent = prop->base_rent;
+    int buildings = prop->building_count;
+    
+    // If property is mortgaged, no rent collected
+    if (prop->is_mortgaged) {
+        printf("  %s is mortgaged. No rent collected.\n", prop->property_name);
+        return 0;
+    }
+    
+    // If building is closed (condition < 25%), no rent
+    if (prop->condition_percentage < 25 && buildings > 0) {
+        printf("  %s building is closed. No rent collected.\n", prop->property_name);
+        return 0;
+    }
+    
+    // Apply rent multiplier based on buildings (from assignment)
+    int multiplier = 1;
+    
+    switch (buildings) {
+        case 0:  // No buildings
+            multiplier = 1;
+            break;
+        case 1:  // 1 house
+            multiplier = 2;
+            break;
+        case 2:  // 2 houses
+            multiplier = 3;
+            break;
+        case 3:  // 3 houses
+            multiplier = 5;
+            break;
+        case 4:  // 4 houses
+            multiplier = 7;
+            break;
+        case 5:  // Hotel
+            multiplier = 10;
+            break;
+        default:
+            multiplier = 1;
+            break;
+    }
+    
+    // Apply condition multiplier (from Table 3)
+    int condition_multiplier = get_rent_multiplier(prop);
+    if (condition_multiplier == 0) {
+        return 0;  // Building closed
+    }
+    
+    // Calculate rent: base_rent * building_multiplier * condition_multiplier / 100
+    int rent = (base_rent * multiplier * condition_multiplier) / 100;
+    
+    // If no buildings, condition doesn't apply (use 100%)
+    if (buildings == 0) {
+        rent = base_rent;
+    }
+    
+    return rent;
+}
+
+// Get rent multiplier based on building condition (Table 3)
+int get_rent_multiplier(Property* prop) {
+    if (prop == NULL) return 0;
+    
+    int condition = prop->condition_percentage;
+    
+    // If no buildings, condition doesn't matter
+    if (prop->building_count == 0) {
+        return 100;
+    }
+    
+    // Table 3: Building Condition Table
+    if (condition >= 90 && condition <= 100) {
+        return 100;   // 100% rent
+    } else if (condition >= 75 && condition <= 89) {
+        return 90;    // 90% rent
+    } else if (condition >= 50 && condition <= 74) {
+        return 75;    // 75% rent
+    } else if (condition >= 25 && condition <= 49) {
+        return 50;    // 50% rent
+    } else if (condition < 25) {
+        return 0;     // Building closed - 0% rent
+    }
+    
+    return 100;  // Default
+}
+
+// Get current building multiplier based on building count
+int get_building_multiplier(int building_count) {
+    switch (building_count) {
+        case 0:  return 1;
+        case 1:  return 2;
+        case 2:  return 3;
+        case 3:  return 5;
+        case 4:  return 7;
+        case 5:  return 10;
+        default: return 1;
+    }
+}
+
+// Print building status for a property
+void print_building_status(Property* prop) {
+    if (prop == NULL) return;
+    
+    printf("  %s: ", prop->property_name);
+    
+    if (prop->building_count == 0) {
+        printf("No buildings\n");
+    } else if (prop->building_count == 5) {
+        printf("HOTEL (Condition: %d%%)\n", prop->condition_percentage);
+    } else {
+        printf("%d house(s) (Condition: %d%%)\n", 
+               prop->building_count, prop->condition_percentage);
+    }
+}
+
+// Print all buildings for a player
+void print_player_buildings(Player* player) {
+    if (player == NULL) return;
+    
+    printf("\n=== %s BUILDINGS ===\n", player->player_name);
+    int has_buildings = 0;
+    
+    for (int i = 0; i < MAX_PROPERTIES; i++) {
+        if (property_array[i].owner_id == player->player_id &&
+            property_array[i].building_count > 0) {
+            print_building_status(&property_array[i]);
+            has_buildings = 1;
+        }
+    }
+    
+    if (!has_buildings) {
+        printf("  No buildings.\n");
+    }
+    printf("====================\n");
+}

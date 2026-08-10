@@ -255,7 +255,7 @@ int get_min_buildings_in_group(Player* player, PropertyGroup group);
 int get_building_cost(Property* prop);
 void print_player_finance(Player* player);
 
-
+// loan system
 int get_max_loan_amount(Player* player);
 int take_loan(Player* player, int amount);
 int repay_loan(Player* player, int amount);
@@ -264,6 +264,28 @@ void process_loan_default(Player* player);
 void lock_collateral(Player* player);
 void unlock_collateral(Player* player);
 void update_loan_interest_rate(Player* player, int inflation_rate);
+
+//  Insurance System 
+int calculate_insurance_premium(Property* prop, int policy_type);
+int buy_insurance(Player* player, int property_index, int policy_type);
+void process_insurance_expiry(Property* prop);
+int process_disaster_claim(Property* prop, int damage_cost);
+int has_active_insurance(Property* prop);
+int get_insurance_reminder(Property* prop);
+const char* get_insurance_policy_name(int policy_type);
+void print_player_insurance(Player* player);
+
+
+// finance.c - Building System Prototypes
+int can_build_house(Player* player, int property_index);
+int build_house(Player* player, int property_index);
+int can_build_hotel(Player* player, int property_index);
+int build_hotel(Player* player, int property_index);
+int calculate_rent_with_buildings(Property* prop);
+int get_rent_multiplier(Property* prop);
+int get_building_multiplier(int building_count);
+void print_building_status(Property* prop);
+void print_player_buildings(Player* player);
 
 #endif // TYPES_H
 
