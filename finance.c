@@ -988,3 +988,278 @@ void print_player_buildings(Player* player) {
     }
     printf("====================\n");
 }
+
+// ============================================
+// BUILDING CONDITION SYSTEM
+// ============================================
+
+// Update building condition - called at end of each round
+// Decreases condition by 2% per round for buildings
+void update_building_condition(Property* prop) {
+    if (prop == NULL) return;
+    
+    // Only applies to properties with buildings
+    if (prop->building_count == 0) return;
+    
+    // Decrease condition by 2% each round
+    prop->condition_percentage -= 2;
+    
+    // Cap at 0 (minimum)
+    if (prop->condition_percentage < 0) {
+        prop->condition_percentage = 0;
+    }
+    
+    // Track rounds since maintenance
+    prop->rounds_since_maintenance++;
+    
+    // Check if condition dropped below 25% (building closed)
+    if (prop->condition_percentage < 25) {
+        printf("  WARNING: %s building is CLOSED! (Condition: %d%%)\n",
+               prop->property_name, prop->condition_percentage);
+    }
+    
+    // Check for structural damage (20+ consecutive rounds without maintenance)
+    if (prop->rounds_since_maintenance > 20 && !prop->has_structural_damage) {
+        process_structural_damage(prop);
+    }
+}
+
+// Perform maintenance on a property's building
+// Restores condition to 100%
+// Returns: 1 = success, 0 = failure
+int perform_maintenance(Player* player, int property_index) {
+    if (player == NULL) return 0;
+    if (property_index < 0 || property_index >= MAX_PROPERTIES) return 0;
+    
+    Property* prop = &property_array[property_index];
+    
+    // Check if player owns the property
+    if (prop->owner_id != player->player_id) {
+        printf("  %s does not own %s!\n", player->player_name, prop->property_name);
+        return 0;
+    }
+    
+    // Check if property has buildings
+    if (prop->building_count == 0) {
+        printf("  %s has no buildings to maintain.\n", prop->property_name);
+        return 0;
+    }
+    
+    // Check if condition is already 100%
+    if (prop->condition_percentage == 100) {
+        printf("  %s is already in perfect condition.\n", prop->property_name);
+        return 0;
+    }
+    
+    // Calculate maintenance cost
+    // House: 5% of construction cost
+    // Hotel: 8% of construction cost
+    int cost = get_maintenance_cost(prop);
+    
+    if (cost == 0) {
+        printf("  Error calculating maintenance cost.\n");
+        return 0;
+    }
+    
+    // Check if player has enough cash
+    if (player->cash < cost) {
+        printf("  Insufficient funds! Maintenance cost: LKR %d, Available: LKR %d\n",
+               cost, player->cash);
+        return 0;
+    }
+    
+    // Deduct cost
+    player->cash -= cost;
+    
+    // Restore condition to 100%
+    prop->condition_percentage = 100;
+    prop->rounds_since_maintenance = 0;
+    
+    // If had structural damage, remove it (renovation required separately)
+    // Maintenance alone doesn't fix structural damage
+    
+    printf("  %s performed maintenance on %s. (Cost: LKR %d)\n",
+           player->player_name, prop->property_name, cost);
+    printf("    Condition restored to 100%%.\n");
+    
+    return 1;
+}
+
+// Get maintenance cost for a property
+// Returns: Cost in LKR
+int get_maintenance_cost(Property* prop) {
+    if (prop == NULL) return 0;
+    if (prop->building_count == 0) return 0;
+    
+    int construction_cost;
+    int percentage;
+    
+    if (prop->building_count == 5) {
+        // Hotel: 8% of hotel construction cost
+        construction_cost = prop->hotel_construction_cost;
+        percentage = 8;
+    } else {
+        // House: 5% of house construction cost
+        construction_cost = prop->house_construction_cost;
+        percentage = 5;
+    }
+    
+    int cost = (construction_cost * percentage) / 100;
+    
+    // If property has structural damage, maintenance costs 50% more
+    if (prop->has_structural_damage) {
+        cost = (cost * 150) / 100;
+    }
+    
+    return cost;
+}
+
+// Process structural damage on a property
+// Occurs when maintenance is ignored for more than 20 consecutive rounds
+void process_structural_damage(Property* prop) {
+    if (prop == NULL) return;
+    if (prop->has_structural_damage) return;
+    
+    printf("\n  ⚠️ STRUCTURAL DAMAGE on %s! ⚠️\n", prop->property_name);
+    printf("  Maintenance ignored for over 20 rounds.\n");
+    
+    // Mark as structurally damaged
+    prop->has_structural_damage = 1;
+    
+    // Reduce property value by 15%
+    prop->value_reduction += 15;
+    if (prop->value_reduction > 30) {
+        prop->value_reduction = 30;  // Max 30%
+    }
+    
+    // Reduce maximum rent by 25%
+    // We'll handle this in calculate_rent_with_buildings
+    // For now, we'll store it as a flag
+    
+    printf("  Effects:\n");
+    printf("    - Property value reduced by 15%% (Total reduction: %d%%)\n", 
+           prop->value_reduction);
+    printf("    - Maximum rent reduced by 25%%\n");
+    printf("    - Future maintenance costs increased by 50%%\n");
+    printf("  Renovation required to restore property.\n");
+}
+
+// Check if a building is closed (condition < 25%)
+int is_building_closed(Property* prop) {
+    if (prop == NULL) return 1;  // NULL considered closed
+    if (prop->building_count == 0) return 0;  // No building = not closed
+    
+    return (prop->condition_percentage < 25);
+}
+
+// Check if a building needs maintenance (condition < 50%)
+int needs_maintenance(Property* prop) {
+    if (prop == NULL) return 0;
+    if (prop->building_count == 0) return 0;
+    
+    return (prop->condition_percentage < 50);
+}
+
+// Get condition status as string
+const char* get_condition_status(Property* prop) {
+    if (prop == NULL) return "Unknown";
+    if (prop->building_count == 0) return "No Building";
+    
+    int cond = prop->condition_percentage;
+    
+    if (cond >= 90) return "Excellent";
+    else if (cond >= 75) return "Good";
+    else if (cond >= 50) return "Fair";
+    else if (cond >= 25) return "Poor";
+    else return "CLOSED";
+}
+
+// Print condition of all buildings owned by a player
+void print_player_conditions(Player* player) {
+    if (player == NULL) return;
+    
+    printf("\n=== %s BUILDING CONDITIONS ===\n", player->player_name);
+    int has_buildings = 0;
+    
+    for (int i = 0; i < MAX_PROPERTIES; i++) {
+        if (property_array[i].owner_id == player->player_id &&
+            property_array[i].building_count > 0) {
+            
+            Property* prop = &property_array[i];
+            const char* status = get_condition_status(prop);
+            
+            printf("  %s: %d%% (%s)", 
+                   prop->property_name, 
+                   prop->condition_percentage,
+                   status);
+            
+            if (prop->has_structural_damage) {
+                printf(" [STRUCTURAL DAMAGE]");
+            }
+            if (prop->condition_percentage < 25) {
+                printf(" [CLOSED]");
+            }
+            printf("\n");
+            
+            has_buildings = 1;
+        }
+    }
+    
+    if (!has_buildings) {
+        printf("  No buildings.\n");
+    }
+    printf("================================\n");
+}
+
+// Renovate a property (fixes structural damage and resets age)
+// Note: This is different from maintenance
+// Returns: 1 = success, 0 = failure
+int renovate_property(Player* player, int property_index) {
+    if (player == NULL) return 0;
+    if (property_index < 0 || property_index >= MAX_PROPERTIES) return 0;
+    
+    Property* prop = &property_array[property_index];
+    
+    // Check if player owns the property
+    if (prop->owner_id != player->player_id) {
+        printf("  %s does not own %s!\n", player->player_name, prop->property_name);
+        return 0;
+    }
+    
+    // Check if property needs renovation
+    if (!prop->has_structural_damage && prop->property_age <= 50) {
+        printf("  %s does not need renovation.\n", prop->property_name);
+        return 0;
+    }
+    
+    // Calculate renovation cost: 25% of replacement value
+    int property_value = get_property_value(prop);
+    int renovation_cost = (property_value * 25) / 100;
+    
+    if (renovation_cost == 0) {
+        renovation_cost = 1000;  // Minimum cost
+    }
+    
+    // Check if player has enough cash
+    if (player->cash < renovation_cost) {
+        printf("  Insufficient funds! Renovation cost: LKR %d, Available: LKR %d\n",
+               renovation_cost, player->cash);
+        return 0;
+    }
+    
+    // Deduct cost
+    player->cash -= renovation_cost;
+    
+    // Restore property
+    prop->has_structural_damage = 0;
+    prop->property_age = 0;
+    prop->value_reduction = 0;
+    prop->condition_percentage = 100;
+    prop->rounds_since_maintenance = 0;
+    
+    printf("  %s renovated %s. (Cost: LKR %d)\n",
+           player->player_name, prop->property_name, renovation_cost);
+    printf("    Property restored: age reset, damage repaired, value restored.\n");
+    
+    return 1;
+}

@@ -287,5 +287,17 @@ int get_building_multiplier(int building_count);
 void print_building_status(Property* prop);
 void print_player_buildings(Player* player);
 
+
+// finance.c - Building Condition Prototypes
+void update_building_condition(Property* prop);
+int perform_maintenance(Player* player, int property_index);
+int get_maintenance_cost(Property* prop);
+void process_structural_damage(Property* prop);
+int is_building_closed(Property* prop);
+int needs_maintenance(Property* prop);
+const char* get_condition_status(Property* prop);
+void print_player_conditions(Player* player);
+int renovate_property(Player* player, int property_index);
+
 #endif // TYPES_H
 
