@@ -23,6 +23,7 @@ Square* get_square(int position);
 int check_game_over(GameState* game);
 int determine_first_player(GameState* game);
 void process_turn(GameState* game, Player* player);
+int get_round(const GameState* game);
 
 void init_game(GameState* game) {
     // initialize the board with all the data
@@ -169,9 +170,9 @@ void run_game(GameState* game) {
     printf("Starting simulation...\n");
     printf("Maximum Rounds: %d\n\n", MAX_ROUNDS);
 
-    int rounds = 0;
+    int rounds = get_round(game);
     while(rounds<3 && !game->is_game_over){
-        printf("\n========== Turn %d (TEST MODE) ==========\n", rounds);
+        printf("\n========== Round %d (TEST MODE) ==========\n", rounds);
         for(int i =0; i<MAX_PLAYERS; i++){
             int player_idx = (game->starting_player_index + i) % MAX_PLAYERS;
             Player* player = &game->players[player_idx];
@@ -183,7 +184,8 @@ void run_game(GameState* game) {
             }
         }
         printf("=============end of turn=========================");
-        rounds = rounds + 1;
+        rounds = get_round(game);
+        game->round_number = rounds;
         
     }
 }
@@ -199,6 +201,28 @@ Player* get_player_by_id(GameState* game, int player_id) {
         return &game->players[player_id];
     }
     return NULL;
+}
+
+// Return the lowest personal round among players who can currently advance.
+// If every active player is in jail, the game round remains unchanged.
+int get_round(const GameState* game) {
+    int minimum_round = 0;
+    int found_eligible_player = 0;
+
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        const Player* player = &game->players[i];
+
+        if (player->is_bankrupt || player->is_in_jail) {
+            continue;
+        }
+
+        if (!found_eligible_player || player->rounds_survived < minimum_round) {
+            minimum_round = player->rounds_survived;
+            found_eligible_player = 1;
+        }
+    }
+
+    return found_eligible_player ? minimum_round : game->round_number;
 }
 
 // Function to check if game is over
@@ -295,6 +319,7 @@ void process_turn(GameState* game, Player* player){
            old_position, player->board_position);
 
     if(passed_go){
+        player->rounds_survived++;
         printf("    Passed GO! Collected LKR %d\n", GO_BONUS);
     }
 
