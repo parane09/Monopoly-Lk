@@ -255,5 +255,15 @@ int get_min_buildings_in_group(Player* player, PropertyGroup group);
 int get_building_cost(Property* prop);
 void print_player_finance(Player* player);
 
+
+int get_max_loan_amount(Player* player);
+int take_loan(Player* player, int amount);
+int repay_loan(Player* player, int amount);
+void apply_loan_interest(Player* player);
+void process_loan_default(Player* player);
+void lock_collateral(Player* player);
+void unlock_collateral(Player* player);
+void update_loan_interest_rate(Player* player, int inflation_rate);
+
 #endif // TYPES_H
 

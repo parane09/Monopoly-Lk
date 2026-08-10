@@ -122,3 +122,534 @@ void print_player_finance(Player* player) {
     printf("Properties owned: %d\n", player->owned_property_count);
     printf("==============================\n");
 }
+
+// ============================================
+// LOAN SYSTEM
+// ============================================
+
+// Calculate maximum loan amount a player can get
+// Maximum = 75% of total mortgage value of unmortgaged, unlocked properties
+int get_max_loan_amount(Player* player) {
+    if (player == NULL) return 0;
+    
+    int total_mortgage_value = get_total_mortgage_value(player);
+    
+    // 75% of total mortgage value
+    int max_loan = (total_mortgage_value * 75) / 100;
+    
+    return max_loan;
+}
+
+// Take a loan - player borrows money with properties as collateral
+// Returns: 1 = success, 0 = failure
+int take_loan(Player* player, int amount) {
+    if (player == NULL) return 0;
+    
+    // Check if player already has an active loan
+    if (player->player_loan.is_active) {
+        printf("  %s already has an active loan!\n", player->player_name);
+        return 0;
+    }
+    
+    // Calculate maximum loan amount
+    int max_loan = get_max_loan_amount(player);
+    if (max_loan == 0) {
+        printf("  %s has no eligible collateral for a loan.\n", player->player_name);
+        return 0;
+    }
+    
+    // Check if requested amount is valid
+    if (amount <= 0 || amount > max_loan) {
+        printf("  Invalid loan amount. Maximum: LKR %d\n", max_loan);
+        return 0;
+    }
+    
+    // Check if player has enough cash? No - loan adds cash, doesn't require it
+    
+    // Lock collateral properties
+    int locked_count = 0;
+    int total_needed = 0;
+    
+    // We need to lock properties worth at least the loan amount
+    // Lock properties in order (highest mortgage value first)
+    // Simple approach: lock all unmortgaged, unlocked properties
+    
+
+    lock_collateral(player);
+    printf("  Collateral: %d properties locked.\n", player->player_loan.collateral_count);
+    
+    if (locked_count == 0) {
+        printf("  No properties available to lock as collateral.\n");
+        return 0;
+    }
+    
+    // Create the loan
+    player->player_loan.is_active = 1;
+    player->player_loan.current_amount = amount;
+    player->player_loan.original_amount = amount;
+    player->player_loan.interest_rate = 8;  // Base interest rate (will be updated with inflation)
+    player->player_loan.rounds_remaining = LOAN_DURATION;
+    player->player_loan.initial_duration = LOAN_DURATION;
+    player->player_loan.collateral_count = locked_count;
+    
+    // Add cash to player
+    player->cash += amount;
+    
+    printf("  %s obtained a secured loan of LKR %d.\n", 
+           player->player_name, amount);
+    printf("  Interest Rate: %d%%, Duration: %d Rounds\n", 
+           player->player_loan.interest_rate, LOAN_DURATION);
+    printf("  Collateral: %d properties locked.\n", locked_count);
+    
+    return 1;
+}
+
+// Repay part or all of a loan
+// Returns: 1 = success, 0 = failure
+int repay_loan(Player* player, int amount) {
+    if (player == NULL) return 0;
+    
+    // Check if loan is active
+    if (!player->player_loan.is_active) {
+        printf("  %s has no active loan to repay.\n", player->player_name);
+        return 0;
+    }
+    
+    // Check amount
+    if (amount <= 0) {
+        printf("  Repayment amount must be positive.\n");
+        return 0;
+    }
+    
+    // Check if player has enough cash
+    if (amount > player->cash) {
+        printf("  Insufficient cash. Available: LKR %d\n", player->cash);
+        return 0;
+    }
+    
+    // Don't repay more than owed
+    if (amount > player->player_loan.current_amount) {
+        amount = player->player_loan.current_amount;
+    }
+    
+    // Deduct cash
+    player->cash -= amount;
+    player->player_loan.current_amount -= amount;
+    
+    printf("  %s repaid LKR %d. Remaining loan: LKR %d\n", 
+           player->player_name, amount, player->player_loan.current_amount);
+    
+    // Check if fully repaid
+    if (player->player_loan.current_amount == 0) {
+        // Unlock all collateral
+        unlock_collateral(player);
+        player->player_loan.is_active = 0;
+        printf("  Loan fully repaid! Collateral unlocked.\n");
+    }
+    
+    return 1;
+}
+
+// Apply compound interest to a player's loan
+// Called at the end of each round
+void apply_loan_interest(Player* player) {
+    if (player == NULL) return;
+    if (!player->player_loan.is_active) return;
+    
+    // Compound interest: amount = amount * (100 + rate) / 100
+    int interest = (player->player_loan.current_amount * player->player_loan.interest_rate) / 100;
+    player->player_loan.current_amount += interest;
+    
+    // Decrease duration
+    player->player_loan.rounds_remaining--;
+    
+    printf("  %s loan interest: LKR %d added. New balance: LKR %d (Rounds left: %d)\n",
+           player->player_name, interest, 
+           player->player_loan.current_amount,
+           player->player_loan.rounds_remaining);
+    
+    // Check for default
+    if (player->player_loan.rounds_remaining <= 0) {
+        process_loan_default(player);
+    }
+}
+
+// Process loan default - foreclosure
+void process_loan_default(Player* player) {
+    if (player == NULL) return;
+    if (!player->player_loan.is_active) return;
+    
+    printf("\n LOAN DEFAULT: %s has failed to repay the loan! \n", 
+           player->player_name);
+    printf("  Foreclosure initiated...\n");
+    
+    // Transfer all collateral properties to the bank
+    for (int i = 0; i < player->player_loan.collateral_count; i++) {
+        int prop_idx = player->player_loan.collateral_properties[i];
+        if (prop_idx < 0 || prop_idx >= MAX_PROPERTIES) continue;
+        
+        Property* prop = &property_array[prop_idx];
+        
+        // Demolish buildings
+        if (prop->building_count > 0) {
+            printf("    Demolishing buildings on %s\n", prop->property_name);
+            prop->building_count = 0;
+            prop->condition_percentage = 100;
+        }
+        
+        // Cancel insurance
+        if (prop->insurance_policy != INSURANCE_NONE) {
+            printf("    Cancelling insurance on %s\n", prop->property_name);
+            prop->insurance_policy = INSURANCE_NONE;
+            prop->insurance_rounds_remaining = 0;
+        }
+        
+        // Remove from player's owned properties
+        for (int j = 0; j < player->owned_property_count; j++) {
+            if (player->owned_property_indices[j] == prop_idx) {
+                // Shift remaining properties down
+                for (int k = j; k < player->owned_property_count - 1; k++) {
+                    player->owned_property_indices[k] = player->owned_property_indices[k + 1];
+                }
+                player->owned_property_count--;
+                break;
+            }
+        }
+        
+        // Transfer to bank (owner_id = -1)
+        prop->owner_id = -1;
+        prop->is_loan_locked = 0;
+        
+        printf("    Property %s transferred to Bank.\n", prop->property_name);
+    }
+    
+    // Clear the loan
+    player->player_loan.is_active = 0;
+    player->player_loan.current_amount = 0;
+    player->player_loan.collateral_count = 0;
+    
+    printf("  Outstanding debt cleared.\n");
+    
+    // Check if player has any remaining assets
+    if (player->owned_property_count == 0 && player->cash <= 0) {
+        player->is_bankrupt = 1;
+        printf("  💀 %s is now BANKRUPT! 💀\n", player->player_name);
+    } else {
+        printf("  %s continues with remaining assets.\n", player->player_name);
+        print_player_finance(player);
+    }
+}
+
+// Lock properties as collateral for a loan
+void lock_collateral(Player* player) {
+    if (player == NULL) return;
+    
+    int locked = 0;
+    
+    for (int i = 0; i < MAX_PROPERTIES && locked < MAX_COLLATERAL; i++) {
+        if (property_array[i].owner_id == player->player_id &&
+            !property_array[i].is_mortgaged &&
+            !property_array[i].is_loan_locked) {
+            
+            property_array[i].is_loan_locked = 1;
+            player->player_loan.collateral_properties[locked] = i;
+            locked++;
+        }
+    }
+    
+    player->player_loan.collateral_count = locked;
+}
+
+// Unlock all collateral properties (loan fully repaid)
+void unlock_collateral(Player* player) {
+    if (player == NULL) return;
+    
+    for (int i = 0; i < player->player_loan.collateral_count; i++) {
+        int prop_idx = player->player_loan.collateral_properties[i];
+        if (prop_idx >= 0 && prop_idx < MAX_PROPERTIES) {
+            property_array[prop_idx].is_loan_locked = 0;
+        }
+    }
+    
+    player->player_loan.collateral_count = 0;
+}
+
+// Update loan interest rate based on inflation
+void update_loan_interest_rate(Player* player, int inflation_rate) {
+    if (player == NULL) return;
+    if (!player->player_loan.is_active) return;
+    
+    // Base rate + inflation adjustment
+    int new_rate = 8 + inflation_rate;
+    if (new_rate < 0) new_rate = 0;
+    if (new_rate > 25) new_rate = 25;  // Cap at 25%
+    
+    player->player_loan.interest_rate = new_rate;
+}
+
+// ============================================
+// INSURANCE SYSTEM
+// ============================================
+
+// Calculate insurance premium based on policy type and property value
+// Returns: Premium amount in LKR
+int calculate_insurance_premium(Property* prop, int policy_type) {
+    if (prop == NULL) return 0;
+    
+    int property_value = get_property_value(prop);
+    int premium = 0;
+    
+    switch (policy_type) {
+        case INSURANCE_BASIC:
+            // 5% of property value
+            premium = (property_value * 5) / 100;
+            break;
+            
+        case INSURANCE_COMPREHENSIVE:
+            // 10% of property value
+            premium = (property_value * 10) / 100;
+            break;
+            
+        case INSURANCE_BUSINESS:
+            // 15% of property value (only for hotels)
+            if (prop->building_count == 5) {  // Has hotel
+                premium = (property_value * 15) / 100;
+            } else {
+                printf("  Business Interruption Insurance only applies to hotels!\n");
+                return 0;
+            }
+            break;
+            
+        case INSURANCE_NONE:
+        default:
+            return 0;
+    }
+    
+    return premium;
+}
+
+// Buy insurance for a property
+// Returns: 1 = success, 0 = failure
+int buy_insurance(Player* player, int property_index, int policy_type) {
+    if (player == NULL) return 0;
+    if (property_index < 0 || property_index >= MAX_PROPERTIES) return 0;
+    
+    Property* prop = &property_array[property_index];
+    
+    // Check if property belongs to player
+    if (prop->owner_id != player->player_id) {
+        printf("  %s does not own %s!\n", player->player_name, prop->property_name);
+        return 0;
+    }
+    
+    // Check if already has insurance
+    if (prop->insurance_policy != INSURANCE_NONE) {
+        printf("  %s already has insurance on %s.\n", 
+               player->player_name, prop->property_name);
+        return 0;
+    }
+    
+    // Calculate premium
+    int premium = calculate_insurance_premium(prop, policy_type);
+    if (premium == 0) {
+        printf("  Invalid insurance policy or property not eligible.\n");
+        return 0;
+    }
+    
+    // Check if player can afford premium
+    if (premium > player->cash) {
+        printf("  Insufficient funds! Premium: LKR %d, Available: LKR %d\n", 
+               premium, player->cash);
+        return 0;
+    }
+    
+    // Deduct premium
+    player->cash -= premium;
+    
+    // Set insurance on property
+    prop->insurance_policy = policy_type;
+    prop->insurance_rounds_remaining = INSURANCE_DURATION;
+    
+    // Print policy name
+    const char* policy_names[] = {
+        "None",
+        "Basic Property Insurance",
+        "Comprehensive Insurance",
+        "Business Interruption Insurance"
+    };
+    
+    printf("  %s purchased %s for %s.\n", 
+           player->player_name, 
+           policy_names[policy_type],
+           prop->property_name);
+    printf("  Premium paid: LKR %d. Duration: %d rounds.\n", 
+           premium, INSURANCE_DURATION);
+    
+    return 1;
+}
+
+// Process insurance expiry - called at end of each round
+void process_insurance_expiry(Property* prop) {
+    if (prop == NULL) return;
+    if (prop->insurance_policy == INSURANCE_NONE) return;
+    
+    // Decrement remaining rounds
+    prop->insurance_rounds_remaining--;
+    
+    // Check for renewal reminder (3 rounds before expiry)
+    if (prop->insurance_rounds_remaining == 3) {
+        const char* policy_names[] = {
+            "None",
+            "Basic Property Insurance",
+            "Comprehensive Insurance",
+            "Business Interruption Insurance"
+        };
+        printf("  REMINDER: %s insurance on %s expires in 3 rounds!\n", 
+               policy_names[prop->insurance_policy],
+               prop->property_name);
+    }
+    
+    // Check for expiry
+    if (prop->insurance_rounds_remaining <= 0) {
+        const char* policy_names[] = {
+            "None",
+            "Basic Property Insurance",
+            "Comprehensive Insurance",
+            "Business Interruption Insurance"
+        };
+        printf("  Insurance expired for %s (%s).\n", 
+               prop->property_name,
+               policy_names[prop->insurance_policy]);
+        prop->insurance_policy = INSURANCE_NONE;
+        prop->insurance_rounds_remaining = 0;
+    }
+}
+
+// Process a disaster claim - returns compensation amount
+// Returns: Compensation in LKR, or 0 if no insurance
+int process_disaster_claim(Property* prop, int damage_cost) {
+    if (prop == NULL) return 0;
+    if (prop->insurance_policy == INSURANCE_NONE) {
+        printf("  No insurance on %s. Owner must pay full repair cost: LKR %d\n",
+               prop->property_name, damage_cost);
+        return 0;
+    }
+    
+    int compensation = 0;
+    const char* policy_names[] = {
+        "None",
+        "Basic Property Insurance",
+        "Comprehensive Insurance",
+        "Business Interruption Insurance"
+    };
+    
+    switch (prop->insurance_policy) {
+        case INSURANCE_BASIC:
+            // 80% of repair cost
+            compensation = (damage_cost * 80) / 100;
+            printf("  Basic Insurance covers 80%% of LKR %d = LKR %d\n",
+                   damage_cost, compensation);
+            break;
+            
+        case INSURANCE_COMPREHENSIVE:
+            // 100% of repair cost
+            compensation = damage_cost;
+            printf("  Comprehensive Insurance covers 100%% = LKR %d\n", compensation);
+            break;
+            
+        case INSURANCE_BUSINESS:
+            // Repair cost + 5 rounds lost hotel rental income
+            if (prop->building_count == 5) {  // Has hotel
+                int lost_rent = prop->base_rent * 5;
+                // Apply rent multiplier for hotel (10x)
+                lost_rent = lost_rent * 10;
+                compensation = damage_cost + lost_rent;
+                printf("  Business Interruption covers repair + 5 rounds hotel rent = LKR %d\n",
+                       compensation);
+            } else {
+                // If no hotel, treat as Comprehensive
+                compensation = damage_cost;
+                printf("  No hotel on property. Treated as Comprehensive: LKR %d\n", compensation);
+            }
+            break;
+            
+        default:
+            return 0;
+    }
+    /*
+    // Reduce insurance duration (disaster consumes some coverage)
+    // This is a common house rule - not in spec but makes sense
+    prop->insurance_rounds_remaining -= 2;
+    if (prop->insurance_rounds_remaining < 0) {
+        prop->insurance_rounds_remaining = 0;
+    }
+    */
+    
+    printf("  %s insurance claim approved for %s.\n", 
+           policy_names[prop->insurance_policy],
+           prop->property_name);
+    
+    return compensation;
+}
+
+// Check if a property has active insurance
+int has_active_insurance(Property* prop) {
+    if (prop == NULL) return 0;
+    return (prop->insurance_policy != INSURANCE_NONE);
+}
+
+// Get insurance renewal reminder string
+// Returns: 1 if reminder should be shown, 0 otherwise
+int get_insurance_reminder(Property* prop) {
+    if (prop == NULL) return 0;
+    if (prop->insurance_policy == INSURANCE_NONE) return 0;
+    
+    // Show reminder at 3 rounds remaining
+    if (prop->insurance_rounds_remaining == 3) {
+        return 1;
+    }
+    
+    return 0;
+}
+
+// Get insurance policy name as string
+const char* get_insurance_policy_name(int policy_type) {
+    static const char* names[] = {
+        "None",
+        "Basic Property Insurance",
+        "Comprehensive Insurance",
+        "Business Interruption Insurance"
+    };
+    
+    if (policy_type < 0 || policy_type > 3) {
+        return "Unknown";
+    }
+    
+    return names[policy_type];
+}
+
+// Print all insurance policies for a player
+void print_player_insurance(Player* player) {
+    if (player == NULL) return;
+    
+    printf("\n=== %s INSURANCE POLICIES ===\n", player->player_name);
+    int has_insurance = 0;
+    
+    for (int i = 0; i < MAX_PROPERTIES; i++) {
+        if (property_array[i].owner_id == player->player_id &&
+            property_array[i].insurance_policy != INSURANCE_NONE) {
+            
+            const char* policy_name = get_insurance_policy_name(property_array[i].insurance_policy);
+            printf("  %s: %s (%d rounds remaining)\n",
+                   property_array[i].property_name,
+                   policy_name,
+                   property_array[i].insurance_rounds_remaining);
+            has_insurance = 1;
+        }
+    }
+    
+    if (!has_insurance) {
+        printf("  No active insurance policies.\n");
+    }
+    printf("===============================\n");
+}

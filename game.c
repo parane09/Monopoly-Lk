@@ -184,8 +184,9 @@ void run_game(GameState* game) {
             }
         }
         printf("=============end of turn=========================");
-        rounds = get_round(game);
-        game->round_number = rounds;
+        rounds +=1; //FOR TESTING SMALL LOOPS
+        //rounds = get_round(game);
+        //game->round_number = rounds;
         
     }
 }
