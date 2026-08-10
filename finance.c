@@ -1263,3 +1263,219 @@ int renovate_property(Player* player, int property_index) {
     
     return 1;
 }
+
+// ============================================
+// DEPRECIATION SYSTEM
+// ============================================
+
+// Update property age - called at end of each round
+// Increments age for all owned properties
+void update_property_age(Property* prop) {
+    if (prop == NULL) return;
+    
+    // Only applies to owned properties
+    if (prop->owner_id == -1) return;
+    
+    // Increment age by 1 each round
+    prop->property_age++;
+}
+
+// Calculate depreciation for a property
+// Properties older than 50 rounds lose 1% every 5 rounds (max 30%)
+// Returns: Current depreciation percentage (0-30)
+int calculate_depreciation(Property* prop) {
+    if (prop == NULL) return 0;
+    if (prop->owner_id == -1) return 0;
+    
+    int age = prop->property_age;
+    
+    // No depreciation until age > 50
+    if (age <= PROPERTY_AGE_THRESHOLD) {
+        return 0;
+    }
+    
+    // Calculate rounds over threshold
+    int over_threshold = age - PROPERTY_AGE_THRESHOLD;
+    
+    // 1% depreciation every 5 rounds
+    int depreciation = over_threshold / 5;
+    
+    // Cap at 30%
+    if (depreciation > 30) {
+        depreciation = 30;
+    }
+    
+    // Store in property struct
+    prop->value_reduction = depreciation;
+    
+    return depreciation;
+}
+
+// Get current property value after depreciation
+// This is an enhanced version of the helper function
+// Returns: Current value in LKR
+int get_depreciated_value(Property* prop) {
+    if (prop == NULL) return 0;
+    
+    int value = prop->purchase_price;
+    
+    // Apply value reduction from depreciation
+    if (prop->value_reduction > 0) {
+        value = (value * (100 - prop->value_reduction)) / 100;
+    }
+    
+    // Apply structural damage reduction (15% additional)
+    if (prop->has_structural_damage) {
+        value = (value * 85) / 100;
+    }
+    
+    return value;
+}
+
+// Check if property needs renovation (age > 50 or structural damage)
+int needs_renovation(Property* prop) {
+    if (prop == NULL) return 0;
+    if (prop->owner_id == -1) return 0;
+    
+    if (prop->has_structural_damage) return 1;
+    if (prop->property_age > PROPERTY_AGE_THRESHOLD) return 1;
+    
+    return 0;
+}
+
+// Renovate property - resets age and fixes structural damage
+// This is already defined in the condition system, but let's make sure it's complete
+// Returns: 1 = success, 0 = failure
+int renovate_property(Player* player, int property_index) {
+    if (player == NULL) return 0;
+    if (property_index < 0 || property_index >= MAX_PROPERTIES) return 0;
+    
+    Property* prop = &property_array[property_index];
+    
+    // Check if player owns the property
+    if (prop->owner_id != player->player_id) {
+        printf("  %s does not own %s!\n", player->player_name, prop->property_name);
+        return 0;
+    }
+    
+    // Check if property needs renovation
+    if (!prop->has_structural_damage && prop->property_age <= PROPERTY_AGE_THRESHOLD) {
+        printf("  %s does not need renovation. Age: %d, Threshold: %d\n",
+               prop->property_name, prop->property_age, PROPERTY_AGE_THRESHOLD);
+        return 0;
+    }
+    
+    // Calculate renovation cost: 10% of current market value (from assignment)
+    int property_value = get_property_value(prop);
+    int renovation_cost = (property_value * 10) / 100;
+    
+    if (renovation_cost == 0) {
+        renovation_cost = 500;  // Minimum cost
+    }
+    
+    // Check if player has enough cash
+    if (player->cash < renovation_cost) {
+        printf("  Insufficient funds! Renovation cost: LKR %d, Available: LKR %d\n",
+               renovation_cost, player->cash);
+        return 0;
+    }
+    
+    // Deduct cost
+    player->cash -= renovation_cost;
+    
+    // Restore property
+    prop->has_structural_damage = 0;
+    prop->property_age = 0;
+    prop->value_reduction = 0;
+    prop->condition_percentage = 100;
+    prop->rounds_since_maintenance = 0;
+    
+    printf("  %s renovated %s. (Cost: LKR %d)\n",
+           player->player_name, prop->property_name, renovation_cost);
+    printf("    Property restored: age reset, value restored, condition 100%%.\n");
+    
+    return 1;
+}
+
+// Calculate net worth of a player including depreciated values
+int calculate_net_worth(Player* player) {
+    if (player == NULL) return 0;
+    if (player->is_bankrupt) return 0;
+    
+    int net_worth = player->cash;
+    
+    // Add property values (using depreciated value)
+    for (int i = 0; i < player->owned_property_count; i++) {
+        int prop_idx = player->owned_property_indices[i];
+        if (prop_idx < 0 || prop_idx >= MAX_PROPERTIES) continue;
+        
+        Property* prop = &property_array[prop_idx];
+        
+        // Add property value (with depreciation)
+        net_worth += get_depreciated_value(prop);
+        
+        // Add building value
+        if (prop->building_count > 0) {
+            int building_value = 0;
+            if (prop->building_count == 5) {
+                // Hotel value = hotel construction cost
+                building_value = prop->hotel_construction_cost;
+            } else {
+                // House value = house construction cost × number of houses
+                building_value = prop->house_construction_cost * prop->building_count;
+            }
+            net_worth += building_value;
+        }
+        
+        // Add railway/utility values (handled by property value already)
+    }
+    
+    // Subtract loan amount
+    if (player->player_loan.is_active) {
+        net_worth -= player->player_loan.current_amount;
+    }
+    
+    return net_worth;
+}
+
+// Print property depreciation status
+void print_property_depreciation(Player* player) {
+    if (player == NULL) return;
+    
+    printf("\n=== %s PROPERTY DEPRECIATION ===\n", player->player_name);
+    int has_properties = 0;
+    
+    for (int i = 0; i < player->owned_property_count; i++) {
+        int prop_idx = player->owned_property_indices[i];
+        if (prop_idx < 0 || prop_idx >= MAX_PROPERTIES) continue;
+        
+        Property* prop = &property_array[prop_idx];
+        int depreciation = calculate_depreciation(prop);
+        int current_value = get_depreciated_value(prop);
+        
+        printf("  %s:\n", prop->property_name);
+        printf("    Age: %d rounds", prop->property_age);
+        if (prop->property_age > PROPERTY_AGE_THRESHOLD) {
+            printf(" (Depreciating: %d%%)", depreciation);
+        } else {
+            printf(" (Not depreciating)");
+        }
+        printf("\n");
+        printf("    Current Value: LKR %d (Original: LKR %d)\n", 
+               current_value, prop->purchase_price);
+        
+        if (prop->has_structural_damage) {
+            printf("    ⚠️ STRUCTURAL DAMAGE - Needs renovation!\n");
+        }
+        if (prop->property_age > PROPERTY_AGE_THRESHOLD + 20) {
+            printf("    ⚠️ Property is significantly aged - consider renovation.\n");
+        }
+        
+        has_properties = 1;
+    }
+    
+    if (!has_properties) {
+        printf("  No properties owned.\n");
+    }
+    printf("================================\n");
+}
