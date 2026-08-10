@@ -184,27 +184,8 @@ void run_game(GameState* game) {
         }
         printf("=============end of turn=========================");
         rounds = rounds + 1;
-
+        
     }
-
-/*
-    for(int round = 0; round<3 && !game->is_game_over; round++){
-        printf("\n========== ROUND %d (TEST MODE) ==========\n", round);
-        for(int i =0; i<MAX_PLAYERS; i++){
-            int player_idx = (game->starting_player_index + i) % MAX_PLAYERS;
-            Player* player = &game->players[player_idx];
-            if(!player->is_bankrupt){
-                process_turn(game,player);
-            }
-            else{
-                printf("  %s is bankrupt - skipping\n", player->player_name);
-            }
-        }
-
-    }
-    printf("\n=== TEST MODE COMPLETE ===\n");
-    printf("Full game loop will be implemented with finance.c\n");
-    */
 }
 
 
