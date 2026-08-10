@@ -14,7 +14,7 @@
 #define BOARD_SIZE 40
 #define MAX_PLAYERS 4
 #define MAX_PROPERTIES 28
-#define MAX_COLLATERAL 10
+#define MAX_COLLATERAL MAX_PROPERTIES
 
 #define STARTING_CASH 30000
 #define GO_BONUS 2000
@@ -261,9 +261,8 @@ int take_loan(Player* player, int amount);
 int repay_loan(Player* player, int amount);
 void apply_loan_interest(Player* player);
 void process_loan_default(Player* player);
-void lock_collateral(Player* player);
+void lock_collateral(Player* player, int loan_amount);
 void unlock_collateral(Player* player);
-void update_loan_interest_rate(Player* player, int inflation_rate);
 
 //  Insurance System 
 int calculate_insurance_premium(Property* prop, int policy_type);
@@ -298,6 +297,14 @@ int needs_maintenance(Property* prop);
 const char* get_condition_status(Property* prop);
 void print_player_conditions(Player* player);
 int renovate_property(Player* player, int property_index);
+
+// finance.c - Property Depreciation Prototypes
+void update_property_age(Property* prop);
+int calculate_depreciation(Property* prop);
+int get_depreciated_value(Property* prop);
+int needs_renovation(Property* prop);
+int calculate_net_worth(Player* player);
+void print_property_depreciation(Player* player);
 
 #endif // TYPES_H
 

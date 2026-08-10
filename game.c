@@ -250,30 +250,6 @@ int check_game_over(GameState* game) {
     return 0;
 }
 
-// Function to calculate net worth (will be expanded)
-int calculate_net_worth(Player* player) {
-    int net_worth = player->cash;
-    
-    // Add property values (simplified for now)
-    for (int i = 0; i < player->owned_property_count; i++) {
-        int prop_idx = player->owned_property_indices[i];
-        if (prop_idx >= 0 && prop_idx < MAX_PROPERTIES) {
-            net_worth += property_array[prop_idx].purchase_price;
-            // Add building value (simplified)
-            if (property_array[prop_idx].building_count > 0) {
-                net_worth += property_array[prop_idx].building_count * 1000;
-            }
-        }
-    }
-    
-    // Subtract loan amount
-    if (player->player_loan.is_active) {
-        net_worth -= player->player_loan.current_amount;
-    }
-    
-    return net_worth;
-}
-
 int determine_first_player(GameState* game){
     int players[MAX_PLAYERS] = {0, 1, 2, 3};
     int count = 4;

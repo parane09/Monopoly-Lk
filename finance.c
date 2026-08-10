@@ -18,6 +18,11 @@ int get_property_value(Property* prop) {
     if (prop->value_reduction > 0) {
         value = (value * (100 - prop->value_reduction)) / 100;
     }
+
+    // Structural damage causes a separate 15% loss in property value.
+    if (prop->has_structural_damage) {
+        value = (value * 85) / 100;
+    }
     
     return value;
 }
@@ -166,17 +171,9 @@ int take_loan(Player* player, int amount) {
     
     // Check if player has enough cash? No - loan adds cash, doesn't require it
     
-    // Lock collateral properties
-    int locked_count = 0;
-    int total_needed = 0;
-    
-    // We need to lock properties worth at least the loan amount
-    // Lock properties in order (highest mortgage value first)
-    // Simple approach: lock all unmortgaged, unlocked properties
-    
-
-    lock_collateral(player);
-    printf("  Collateral: %d properties locked.\n", player->player_loan.collateral_count);
+    // Lock only enough eligible collateral to secure the requested amount.
+    lock_collateral(player, amount);
+    int locked_count = player->player_loan.collateral_count;
     
     if (locked_count == 0) {
         printf("  No properties available to lock as collateral.\n");
@@ -340,20 +337,27 @@ void process_loan_default(Player* player) {
     }
 }
 
-// Lock properties as collateral for a loan
-void lock_collateral(Player* player) {
+// Lock enough properties to support a loan at the 75% collateral limit.
+void lock_collateral(Player* player, int loan_amount) {
     if (player == NULL) return;
     
     int locked = 0;
+    int mortgage_value = 0;
     
-    for (int i = 0; i < MAX_PROPERTIES && locked < MAX_COLLATERAL; i++) {
-        if (property_array[i].owner_id == player->player_id &&
-            !property_array[i].is_mortgaged &&
-            !property_array[i].is_loan_locked) {
+    for (int i = 0; i < player->owned_property_count && locked < MAX_COLLATERAL; i++) {
+        int property_index = player->owned_property_indices[i];
+        if (property_index < 0 || property_index >= MAX_PROPERTIES) continue;
+
+        Property* prop = &property_array[property_index];
+        if (prop->owner_id == player->player_id &&
+            !prop->is_mortgaged && !prop->is_loan_locked) {
             
-            property_array[i].is_loan_locked = 1;
-            player->player_loan.collateral_properties[locked] = i;
+            prop->is_loan_locked = 1;
+            player->player_loan.collateral_properties[locked] = property_index;
+            mortgage_value += prop->mortgage_value;
             locked++;
+
+            if ((mortgage_value * 75) / 100 >= loan_amount) break;
         }
     }
     
@@ -372,19 +376,6 @@ void unlock_collateral(Player* player) {
     }
     
     player->player_loan.collateral_count = 0;
-}
-
-// Update loan interest rate based on inflation
-void update_loan_interest_rate(Player* player, int inflation_rate) {
-    if (player == NULL) return;
-    if (!player->player_loan.is_active) return;
-    
-    // Base rate + inflation adjustment
-    int new_rate = 8 + inflation_rate;
-    if (new_rate < 0) new_rate = 0;
-    if (new_rate > 25) new_rate = 25;  // Cap at 25%
-    
-    player->player_loan.interest_rate = new_rate;
 }
 
 // ============================================
@@ -435,6 +426,12 @@ int buy_insurance(Player* player, int property_index, int policy_type) {
     if (property_index < 0 || property_index >= MAX_PROPERTIES) return 0;
     
     Property* prop = &property_array[property_index];
+
+    // Railway stations may be mortgaged, but cannot be insured.
+    if (prop->color_group == GROUP_RAILWAY) {
+        printf("  Railway stations cannot be insured.\n");
+        return 0;
+    }
     
     // Check if property belongs to player
     if (prop->owner_id != player->player_id) {
@@ -666,6 +663,12 @@ int can_build_house(Player* player, int property_index) {
     if (property_index < 0 || property_index >= MAX_PROPERTIES) return 0;
     
     Property* prop = &property_array[property_index];
+
+    // Railway stations and utilities cannot be developed.
+    if (prop->color_group == GROUP_RAILWAY || prop->color_group == GROUP_UTILITY) {
+        printf("  %s cannot be developed.\n", prop->property_name);
+        return 0;
+    }
     
     // Check if player owns the property
     if (prop->owner_id != player->player_id) {
@@ -767,6 +770,12 @@ int can_build_hotel(Player* player, int property_index) {
     if (property_index < 0 || property_index >= MAX_PROPERTIES) return 0;
     
     Property* prop = &property_array[property_index];
+
+    // Railway stations and utilities cannot be developed.
+    if (prop->color_group == GROUP_RAILWAY || prop->color_group == GROUP_UTILITY) {
+        printf("  %s cannot be developed.\n", prop->property_name);
+        return 0;
+    }
     
     // Check if player owns the property
     if (prop->owner_id != player->player_id) {
@@ -903,6 +912,11 @@ int calculate_rent_with_buildings(Property* prop) {
     
     // Calculate rent: base_rent * building_multiplier * condition_multiplier / 100
     int rent = (base_rent * multiplier * condition_multiplier) / 100;
+
+    // Structural damage reduces maximum rent by 25%.
+    if (prop->has_structural_damage) {
+        rent = (rent * 75) / 100;
+    }
     
     // If no buildings, condition doesn't apply (use 100%)
     if (buildings == 0) {
@@ -1100,7 +1114,7 @@ int get_maintenance_cost(Property* prop) {
         percentage = 8;
     } else {
         // House: 5% of house construction cost
-        construction_cost = prop->house_construction_cost;
+        construction_cost = prop->house_construction_cost * prop->building_count;
         percentage = 5;
     }
     
@@ -1126,19 +1140,8 @@ void process_structural_damage(Property* prop) {
     // Mark as structurally damaged
     prop->has_structural_damage = 1;
     
-    // Reduce property value by 15%
-    prop->value_reduction += 15;
-    if (prop->value_reduction > 30) {
-        prop->value_reduction = 30;  // Max 30%
-    }
-    
-    // Reduce maximum rent by 25%
-    // We'll handle this in calculate_rent_with_buildings
-    // For now, we'll store it as a flag
-    
     printf("  Effects:\n");
-    printf("    - Property value reduced by 15%% (Total reduction: %d%%)\n", 
-           prop->value_reduction);
+    printf("    - Property value reduced by 15%%\n");
     printf("    - Maximum rent reduced by 25%%\n");
     printf("    - Future maintenance costs increased by 50%%\n");
     printf("  Renovation required to restore property.\n");
@@ -1211,59 +1214,6 @@ void print_player_conditions(Player* player) {
     printf("================================\n");
 }
 
-// Renovate a property (fixes structural damage and resets age)
-// Note: This is different from maintenance
-// Returns: 1 = success, 0 = failure
-int renovate_property(Player* player, int property_index) {
-    if (player == NULL) return 0;
-    if (property_index < 0 || property_index >= MAX_PROPERTIES) return 0;
-    
-    Property* prop = &property_array[property_index];
-    
-    // Check if player owns the property
-    if (prop->owner_id != player->player_id) {
-        printf("  %s does not own %s!\n", player->player_name, prop->property_name);
-        return 0;
-    }
-    
-    // Check if property needs renovation
-    if (!prop->has_structural_damage && prop->property_age <= 50) {
-        printf("  %s does not need renovation.\n", prop->property_name);
-        return 0;
-    }
-    
-    // Calculate renovation cost: 25% of replacement value
-    int property_value = get_property_value(prop);
-    int renovation_cost = (property_value * 25) / 100;
-    
-    if (renovation_cost == 0) {
-        renovation_cost = 1000;  // Minimum cost
-    }
-    
-    // Check if player has enough cash
-    if (player->cash < renovation_cost) {
-        printf("  Insufficient funds! Renovation cost: LKR %d, Available: LKR %d\n",
-               renovation_cost, player->cash);
-        return 0;
-    }
-    
-    // Deduct cost
-    player->cash -= renovation_cost;
-    
-    // Restore property
-    prop->has_structural_damage = 0;
-    prop->property_age = 0;
-    prop->value_reduction = 0;
-    prop->condition_percentage = 100;
-    prop->rounds_since_maintenance = 0;
-    
-    printf("  %s renovated %s. (Cost: LKR %d)\n",
-           player->player_name, prop->property_name, renovation_cost);
-    printf("    Property restored: age reset, damage repaired, value restored.\n");
-    
-    return 1;
-}
-
 // ============================================
 // DEPRECIATION SYSTEM
 // ============================================
@@ -1315,21 +1265,7 @@ int calculate_depreciation(Property* prop) {
 // This is an enhanced version of the helper function
 // Returns: Current value in LKR
 int get_depreciated_value(Property* prop) {
-    if (prop == NULL) return 0;
-    
-    int value = prop->purchase_price;
-    
-    // Apply value reduction from depreciation
-    if (prop->value_reduction > 0) {
-        value = (value * (100 - prop->value_reduction)) / 100;
-    }
-    
-    // Apply structural damage reduction (15% additional)
-    if (prop->has_structural_damage) {
-        value = (value * 85) / 100;
-    }
-    
-    return value;
+    return get_property_value(prop);
 }
 
 // Check if property needs renovation (age > 50 or structural damage)
@@ -1343,8 +1279,9 @@ int needs_renovation(Property* prop) {
     return 0;
 }
 
-// Renovate property - resets age and fixes structural damage
-// This is already defined in the condition system, but let's make sure it's complete
+// Renovate property - resets age and fixes structural damage.
+// Age/depreciation renovation costs 10% of current market value (Rule-LK 17).
+// Structural building renovation costs 25% of replacement value (Rule-LK 29).
 // Returns: 1 = success, 0 = failure
 int renovate_property(Player* player, int property_index) {
     if (player == NULL) return 0;
@@ -1365,12 +1302,17 @@ int renovate_property(Player* player, int property_index) {
         return 0;
     }
     
-    // Calculate renovation cost: 10% of current market value (from assignment)
-    int property_value = get_property_value(prop);
-    int renovation_cost = (property_value * 10) / 100;
-    
-    if (renovation_cost == 0) {
-        renovation_cost = 500;  // Minimum cost
+    int renovation_cost;
+    if (prop->has_structural_damage) {
+        int replacement_value;
+        if (prop->building_count == 5) {
+            replacement_value = prop->hotel_construction_cost;
+        } else {
+            replacement_value = prop->house_construction_cost * prop->building_count;
+        }
+        renovation_cost = (replacement_value * 25) / 100;
+    } else {
+        renovation_cost = (get_property_value(prop) * 10) / 100;
     }
     
     // Check if player has enough cash
