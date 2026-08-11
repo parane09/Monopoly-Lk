@@ -164,7 +164,7 @@ void run_game(GameState* game) {
 
     game->round_number = get_round(game);
 
-    while (game->round_number <= 2 && !game->is_game_over) {
+    while (game->round_number <= 1 && !game->is_game_over) {
         printf("\n========== Round %d ==========\n", game->round_number);
 
         for(int i =0; i<MAX_PLAYERS; i++){
