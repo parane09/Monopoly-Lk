@@ -155,6 +155,7 @@ typedef struct {
     
     // Board position
     int board_position;        // 0-39
+    int last_dice_total;       // Most recent dice roll; 0 before the first turn
     
     // Owned properties
     int owned_property_indices[MAX_PROPERTIES];  // List of property indices
@@ -242,12 +243,33 @@ typedef struct {
 extern Square board_array[BOARD_SIZE];
 extern Property property_array[MAX_PROPERTIES];
 
-//function prototypes
+// ============================================
+// FUNCTION PROTOTYPES
+// ============================================
 
-//prototypes from game.c
+// Prototypes from game.c
+void init_game(GameState* game);
+void print_game_start(GameState* game);
+void run_game(GameState* game);
+Player* get_player_by_id(GameState* game, int player_id);
+int get_round(const GameState* game);
+int check_game_over(GameState* game);
+int determine_first_player(GameState* game);
 void process_turn(GameState* game, Player* player);
+void resolve_landing(GameState* game, Player* player);
 
-//prototypes from finance.c
+// Prototypes from board.c
+void init_board_data(void);
+DiceRoll roll_dice(void);
+int move_player(Player* player, int dice_total);
+Square* get_square(int position);
+Property* get_property(int property_index);
+Property* get_property_at_position(int position);
+int is_property_square(int position);
+SquareType get_square_type(int position);
+int count_properties_in_group(Player* player, PropertyGroup group);
+
+// Prototypes from finance.c
 int get_property_value(Property* prop);
 int get_total_mortgage_value(Player* player);
 int has_monopoly(Player* player, PropertyGroup group);
@@ -305,6 +327,17 @@ int get_depreciated_value(Property* prop);
 int needs_renovation(Property* prop);
 int calculate_net_worth(Player* player);
 void print_property_depreciation(Player* player);
+
+
+// game.c prototypes
+void end_of_round_processing(GameState* game);
+void process_inflation(GameState* game);
+void check_disaster(GameState* game);
+void process_market_review(GameState* game);
+void process_national_event(GameState* game);
+void process_regional_development(GameState* game);
+void process_government_regulation(GameState* game);
+
 
 #endif // TYPES_H
 

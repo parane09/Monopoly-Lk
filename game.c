@@ -15,15 +15,6 @@
 // GAME INITIALIZATION
 // ============================================
 
-// function prototypes
-void init_board_data(); 
-DiceRoll roll_dice(void);
-int move_player(Player* player, int dice_total);
-Square* get_square(int position);
-int check_game_over(GameState* game);
-int determine_first_player(GameState* game);
-void process_turn(GameState* game, Player* player);
-int get_round(const GameState* game);
 
 void init_game(GameState* game) {
     // initialize the board with all the data
@@ -91,6 +82,7 @@ void init_game(GameState* game) {
         
         // Board position (starts at GO)
         game->players[i].board_position = 0;
+        game->players[i].last_dice_total = 0;
         
         // Property ownership (none initially)
         for (int j = 0; j < MAX_PROPERTIES; j++) {
@@ -170,26 +162,46 @@ void run_game(GameState* game) {
     printf("Starting simulation...\n");
     printf("Maximum Rounds: %d\n\n", MAX_ROUNDS);
 
-    int rounds = get_round(game);
-    while(rounds<3 && !game->is_game_over){
-        printf("\n========== Round %d (TEST MODE) ==========\n", rounds);
+    game->round_number = get_round(game);
+
+    while (game->round_number <= 2 && !game->is_game_over) {
+        printf("\n========== Round %d ==========\n", game->round_number);
+
         for(int i =0; i<MAX_PLAYERS; i++){
             int player_idx = (game->starting_player_index + i) % MAX_PLAYERS;
             Player* player = &game->players[player_idx];
-            if(!player->is_bankrupt){
-                process_turn(game,player);
-            }
-            else{
+
+            if (player->is_bankrupt) {
                 printf("  %s is bankrupt - skipping\n", player->player_name);
+                continue;
+            }
+
+            if (player->is_in_jail) {
+                player->jail_turns_served++;
+                printf("  %s is in jail - skipping turn %d\n",
+                       player->player_name, player->jail_turns_served);
+
+                if (player->jail_turns_served >= 3) {
+                    player->is_in_jail = 0;
+                    player->jail_turns_served = 0;
+                    printf("  %s has been released from jail\n", player->player_name);
+                }
+                continue;
+            }
+
+            process_turn(game, player);
+
+            int updated_round = get_round(game);
+            while (game->round_number < updated_round) {
+                game->round_number++;
+                end_of_round_processing(game);
+            }
+
+            if (check_game_over(game)) {
+                break;
             }
         }
-        printf("=============end of turn=========================");
-        rounds +=1; //FOR TESTING SMALL LOOPS
-        //rounds = get_round(game);
-        //game->round_number = rounds;
-        
     }
-
 }
 
 
@@ -224,7 +236,7 @@ int get_round(const GameState* game) {
         }
     }
 
-    return found_eligible_player ? minimum_round : game->round_number;
+    return found_eligible_player ? minimum_round + 1 : game->round_number;
 }
 
 // Function to check if game is over
@@ -288,6 +300,7 @@ void process_turn(GameState* game, Player* player){
     printf("\n  %s's turn:\n", player->player_name);
 
     DiceRoll diceroll = roll_dice();
+    player->last_dice_total = diceroll.total;
     printf("    Rolled: %d\n", diceroll.total);
 
     int old_position = player->board_position;
@@ -304,4 +317,499 @@ void process_turn(GameState* game, Player* player){
     Square* square = get_square(player->board_position);
     printf("    Landed on: %s\n", square->square_name);
     printf("    Cash: LKR %d\n", player->cash);
+
+    resolve_landing(game, player);
+}
+
+
+// ============================================
+// RESOLVE LANDING - Handle square effects
+// ============================================
+
+void resolve_landing(GameState* game, Player* player) {
+    if (player == NULL) return;
+    
+    int position = player->board_position;
+    Square* square = get_square(position);
+    
+    if (square == NULL) {
+        printf("  ERROR: Invalid square position %d\n", position);
+        return;
+    }
+    
+    printf("  Landed on: %s\n", square->square_name);
+    
+    // Handle based on square type
+    switch (square->square_type) {
+        
+        // ============================================
+        // CASE: START (GO)
+        // ============================================
+        case SQUARE_START:
+            // GO bonus is already handled in move_player()
+            // Nothing else to do
+            break;
+            
+        // ============================================
+        // CASE: PROPERTY
+        // ============================================
+        case SQUARE_PROPERTY: {
+            Property* prop = get_property_at_position(position);
+            if (prop == NULL) {
+                printf("  ERROR: Property not found at position %d\n", position);
+                break;
+            }
+            
+            // Check if unowned
+            if (prop->owner_id == -1) {
+                // Property is unowned - offer to buy
+                printf("  %s is available for LKR %d.\n", 
+                       prop->property_name, prop->purchase_price);
+                
+                // AI Decision: Should I buy this property?
+                // For now, we'll just print a message
+                // Later: if (should_buy_property(player, prop))
+                printf("  AI will decide whether to purchase...\n");
+                // TODO: Call AI decision function
+                
+                // TEMPORARY: Auto-buy if can afford (for testing)
+                if (player->cash >= prop->purchase_price) {
+                    player->cash -= prop->purchase_price;
+                    prop->owner_id = player->player_id;
+                    
+                    // Add to player's owned properties list
+                    player->owned_property_indices[player->owned_property_count] = square->property_index;
+                    player->owned_property_count++;
+                    
+                    printf("  %s purchased %s for LKR %d.\n", 
+                           player->player_name, prop->property_name, prop->purchase_price);
+                    printf("  Remaining cash: LKR %d\n", player->cash);
+                } else {
+                    printf("  %s cannot afford %s. (Need LKR %d, have LKR %d)\n",
+                           player->player_name, prop->property_name,
+                           prop->purchase_price, player->cash);
+                    // TODO: Start auction
+                }
+            } else {
+                // Property is owned - pay rent to owner
+                if (prop->is_mortgaged) {
+                    printf("  %s is mortgaged. No rent collected.\n", prop->property_name);
+                    break;
+                }
+                
+                // Don't pay rent to yourself
+                if (prop->owner_id == player->player_id) {
+                    printf("  You own this property.\n");
+                    break;
+                }
+                
+                // Calculate rent
+                int rent = calculate_rent_with_buildings(prop);
+                
+                // Apply monopoly bonus if owner has monopoly
+                if (has_monopoly(&game->players[prop->owner_id], prop->color_group)) {
+                    // Rent doubles for monopolies
+                    rent *= 2;
+                    printf("  Owner has monopoly! Rent doubled.\n");
+                }
+                
+                // Pay rent
+                Player* owner = &game->players[prop->owner_id];
+                if (player->cash < rent) {
+                    printf("  %s cannot afford rent of LKR %d!\n", 
+                           player->player_name, rent);
+                    // TODO: Handle inability to pay rent (bankruptcy)
+                    // For now, just take all cash
+                    owner->cash += player->cash;
+                    player->cash = 0;
+                    printf("  %s pays LKR %d to %s.\n", 
+                           player->player_name, player->cash, owner->player_name);
+                } else {
+                    player->cash -= rent;
+                    owner->cash += rent;
+                    printf("  %s pays LKR %d rent to %s.\n", 
+                           player->player_name, rent, owner->player_name);
+                }
+            }
+            break;
+        }
+        
+        // ============================================
+        // CASE: RAILWAY
+        // ============================================
+        case SQUARE_RAILWAY: {
+            Property* prop = get_property_at_position(position);
+            if (prop == NULL) break;
+            
+            // Check if unowned
+            if (prop->owner_id == -1) {
+                printf("  %s is available for LKR %d.\n", 
+                       prop->property_name, prop->purchase_price);
+                
+                // TODO: AI decision to buy
+                if (player->cash >= prop->purchase_price) {
+                    player->cash -= prop->purchase_price;
+                    prop->owner_id = player->player_id;
+                    player->owned_property_indices[player->owned_property_count] = square->property_index;
+                    player->owned_property_count++;
+                    printf("  %s purchased %s for LKR %d.\n", 
+                           player->player_name, prop->property_name, prop->purchase_price);
+                }
+                break;
+            }
+            
+            // Pay rent if owned by someone else
+            if (prop->owner_id != player->player_id) {
+                Player* owner = &game->players[prop->owner_id];
+                
+                // Count how many railways the owner has
+                int railway_count = 0;
+                for (int i = 0; i < MAX_PROPERTIES; i++) {
+                    if (property_array[i].color_group == GROUP_RAILWAY &&
+                        property_array[i].owner_id == prop->owner_id) {
+                        railway_count++;
+                    }
+                }
+                
+                // Railway rent based on number owned (Table 2)
+                int rent = 0;
+                switch (railway_count) {
+                    case 1: rent = 250; break;
+                    case 2: rent = 500; break;
+                    case 3: rent = 1000; break;
+                    case 4: rent = 2000; break;
+                    default: rent = 250; break;
+                }
+                
+                // Pay rent
+                if (player->cash < rent) {
+                    owner->cash += player->cash;
+                    player->cash = 0;
+                    printf("  %s pays LKR %d to %s.\n", 
+                           player->player_name, player->cash, owner->player_name);
+                } else {
+                    player->cash -= rent;
+                    owner->cash += rent;
+                    printf("  %s pays LKR %d railway rent to %s.\n", 
+                           player->player_name, rent, owner->player_name);
+                }
+            }
+            break;
+        }
+        
+        // ============================================
+        // CASE: UTILITY
+        // ============================================
+        case SQUARE_UTILITY: {
+            Property* prop = get_property_at_position(position);
+            if (prop == NULL) break;
+            
+            // Check if unowned
+            if (prop->owner_id == -1) {
+                printf("  %s is available for LKR %d.\n", 
+                       prop->property_name, prop->purchase_price);
+                
+                if (player->cash >= prop->purchase_price) {
+                    player->cash -= prop->purchase_price;
+                    prop->owner_id = player->player_id;
+                    player->owned_property_indices[player->owned_property_count] = square->property_index;
+                    player->owned_property_count++;
+                    printf("  %s purchased %s for LKR %d.\n", 
+                           player->player_name, prop->property_name, prop->purchase_price);
+                }
+                break;
+            }
+            
+            // Pay rent if owned by someone else
+            if (prop->owner_id != player->player_id) {
+                Player* owner = &game->players[prop->owner_id];
+                
+                // Count how many utilities the owner has
+                int utility_count = 0;
+                for (int i = 0; i < MAX_PROPERTIES; i++) {
+                    if (property_array[i].color_group == GROUP_UTILITY &&
+                        property_array[i].owner_id == prop->owner_id) {
+                        utility_count++;
+                    }
+                }
+                
+                // Utility rent based on dice value
+                int dice_total = player->last_dice_total;
+                
+                int rent = 0;
+                if (utility_count == 1) {
+                    rent = 4 * dice_total;
+                } else if (utility_count == 2) {
+                    rent = 10 * dice_total;
+                }
+                
+                // Pay rent
+                if (player->cash < rent) {
+                    owner->cash += player->cash;
+                    player->cash = 0;
+                    printf("  %s pays LKR %d to %s.\n", 
+                           player->player_name, player->cash, owner->player_name);
+                } else {
+                    player->cash -= rent;
+                    owner->cash += rent;
+                    printf("  %s pays LKR %d utility rent to %s.\n", 
+                           player->player_name, rent, owner->player_name);
+                }
+            }
+            break;
+        }
+        
+        // ============================================
+        // CASE: EVENT
+        // ============================================
+        case SQUARE_EVENT:
+            printf("  Drawing an event card...\n");
+            // TODO: Draw event card
+            break;
+            
+        // ============================================
+        // CASE: BANK
+        // ============================================
+        case SQUARE_BANK:
+            printf("  Landed on Bank of Ceylon.\n");
+            // TODO: Loan actions
+            // For now, just give a loan option
+            if (player->player_loan.is_active) {
+                printf("  Active loan: LKR %d (Interest: %d%%)\n",
+                       player->player_loan.current_amount,
+                       player->player_loan.interest_rate);
+                // TODO: Offer repayment options
+            } else {
+                int max_loan = get_max_loan_amount(player);
+                printf("  Maximum loan available: LKR %d\n", max_loan);
+                // TODO: Offer loan
+            }
+            break;
+            
+        // ============================================
+        // CASE: INSURANCE
+        // ============================================
+        case SQUARE_INSURANCE:
+            printf("  Landed on Insurance company.\n");
+            // TODO: Offer insurance purchase
+            break;
+            
+        // ============================================
+        // CASE: TAX
+        // ============================================
+        case SQUARE_TAX:
+            printf("  Paying income tax...\n");
+            // Income tax: LKR 2000
+            if (player->cash >= 2000) {
+                player->cash -= 2000;
+                printf("  %s paid LKR 2,000 income tax.\n", player->player_name);
+            } else {
+                printf("  %s cannot afford tax! TODO: Handle bankruptcy.\n", 
+                       player->player_name);
+            }
+            break;
+            
+        // ============================================
+        // CASE: GO TO JAIL
+        // ============================================
+        case SQUARE_GO_TO_JAIL:
+            printf("  GO TO JAIL!\n");
+            player->is_in_jail = 1;
+            player->board_position = 10;  // Jail square
+            printf("  %s was sent to jail.\n", player->player_name);
+            break;
+            
+        // ============================================
+        // CASE: JAIL / JUST VISITING
+        // ============================================
+        case SQUARE_JAIL:
+            printf("  Just visiting jail.\n");
+            break;
+            
+        // ============================================
+        // CASE: FREE PARKING
+        // ============================================
+        case SQUARE_FREE_PARKING:
+            printf("  Free parking - nothing happens.\n");
+            break;
+            
+        // ============================================
+        // DEFAULT
+        // ============================================
+        default:
+            printf("  Unknown square type!\n");
+            break;
+    }
+}
+
+// ============================================
+// END OF ROUND PROCESSING
+// Called after all 4 players have completed their turns
+// ============================================
+
+void end_of_round_processing(GameState* game) {
+    if (game == NULL) return;
+    
+    printf("\n=== END OF ROUND %d PROCESSING ===\n", game->round_number);
+    
+    // ============================================
+    // 1. LOAN INTEREST
+    // ============================================
+    printf("\n[1] Processing Loan Interest...\n");
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        Player* player = &game->players[i];
+        if (!player->is_bankrupt && player->player_loan.is_active) {
+            apply_loan_interest(player);
+        }
+    }
+    
+    // ============================================
+    // 2. INSURANCE EXPIRY
+    // ============================================
+    printf("\n[2] Processing Insurance Expiry...\n");
+    for (int i = 0; i < MAX_PROPERTIES; i++) {
+        Property* prop = &property_array[i];
+        if (prop->owner_id != -1 && prop->insurance_policy != INSURANCE_NONE) {
+            process_insurance_expiry(prop);
+        }
+    }
+    
+    // ============================================
+    // 3. BUILDING CONDITION
+    // ============================================
+    printf("\n[3] Updating Building Conditions...\n");
+    for (int i = 0; i < MAX_PROPERTIES; i++) {
+        Property* prop = &property_array[i];
+        if (prop->owner_id != -1 && prop->building_count > 0) {
+            update_building_condition(prop);
+        }
+    }
+    
+    // ============================================
+    // 4. PROPERTY AGE & DEPRECIATION
+    // ============================================
+    printf("\n[4] Updating Property Ages...\n");
+    for (int i = 0; i < MAX_PROPERTIES; i++) {
+        Property* prop = &property_array[i];
+        if (prop->owner_id != -1) {
+            // Increment age
+            update_property_age(prop);
+            
+            // Check depreciation
+            int depreciation = calculate_depreciation(prop);
+            if (depreciation > 0 && depreciation % 5 == 0) {
+                printf("  %s depreciated to %d%%\n", 
+                       prop->property_name, 100 - depreciation);
+            }
+        }
+    }
+    
+    // ============================================
+    // 5. ROUND-BASED TRIGGERS
+    // ============================================
+    int round = game->round_number;
+    
+    // Every 10 rounds: Inflation, Disasters, Market Review
+    if (round % 10 == 0) {
+        printf("\n[5a] 10-ROUND EVENTS TRIGGERED!\n");
+        
+        // Inflation
+        printf("  Processing Inflation...\n");
+        process_inflation(game);
+        
+        // Disaster
+        printf("  Checking for Disasters...\n");
+        check_disaster(game);
+        
+        // Market Review
+        printf("  Processing Market Review...\n");
+        process_market_review(game);
+    }
+    
+    // Every 15 rounds: National Events, Regional Development
+    if (round % 15 == 0) {
+        printf("\n[5b] 15-ROUND EVENTS TRIGGERED!\n");
+        
+        // National Event
+        printf("  Processing National Event...\n");
+        process_national_event(game);
+        
+        // Regional Development
+        printf("  Processing Regional Development...\n");
+        process_regional_development(game);
+    }
+    
+    // Every 20 rounds: Government Regulations
+    if (round % 20 == 0) {
+        printf("\n[5c] 20-ROUND EVENTS TRIGGERED!\n");
+        printf("  Processing Government Regulation...\n");
+        process_government_regulation(game);
+    }
+    
+    // ============================================
+    // 6. BANKRUPTCY CHECK
+    // ============================================
+    printf("\n[6] Checking Bankruptcy Status...\n");
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        Player* player = &game->players[i];
+        if (!player->is_bankrupt) {
+            // Check if player has negative cash
+            if (player->cash < 0) {
+                // Try to resolve debt
+                printf("  %s has negative cash: LKR %d\n", 
+                       player->player_name, player->cash);
+                // TODO: Asset liquidation
+            }
+            
+            // Check if player is bankrupt (no cash, no properties, no income)
+            if (player->cash <= 0 && player->owned_property_count == 0) {
+                // Check if they have any income sources
+                int has_income = 0;
+                // TODO: Check railways, utilities, event income
+                if (!has_income) {
+                    player->is_bankrupt = 1;
+                    printf("  💀 %s is BANKRUPT!\n", player->player_name);
+                }
+            }
+        }
+    }
+    
+    printf("\n=== END OF ROUND %d PROCESSING COMPLETE ===\n", game->round_number);
+}
+
+
+
+
+// ============================================
+// EVENT FUNCTIONS (Placeholders - Will be in events.c)
+// ============================================
+
+void process_inflation(GameState* game) {
+    // TODO: Generate inflation rate and apply to values
+    printf("    Inflation processing... (placeholder)\n");
+}
+
+void check_disaster(GameState* game) {
+    // TODO: Random disaster on developed property
+    printf("    Disaster check... (placeholder)\n");
+}
+
+void process_market_review(GameState* game) {
+    // TODO: Market boom/decline for property groups
+    printf("    Market review... (placeholder)\n");
+}
+
+void process_national_event(GameState* game) {
+    // TODO: Draw national event card
+    printf("    National event... (placeholder)\n");
+}
+
+void process_regional_development(GameState* game) {
+    // TODO: Regional development card
+    printf("    Regional development... (placeholder)\n");
+}
+
+void process_government_regulation(GameState* game) {
+    // TODO: Government regulation
+    printf("    Government regulation... (placeholder)\n");
 }
