@@ -339,5 +339,20 @@ void process_regional_development(GameState* game);
 void process_government_regulation(GameState* game);
 
 
+// players.c - AI Strategy Prototypes
+int should_buy_property(Player* player, Property* prop);
+int get_auction_bid(Player* player, Property* prop, int current_bid);
+int should_take_loan(Player* player);
+int get_loan_amount(Player* player);
+int should_repay_loan(Player* player);
+int should_build(Player* player);
+int choose_build_property(Player* player);
+int should_build_hotel(Player* player);
+int choose_hotel_property(Player* player);
+int should_buy_insurance(Player* player, int property_index);
+int get_insurance_type(Player* player, int property_index);
+int should_renovate(Player* player, int property_index);
+
+
 #endif // TYPES_H
 
