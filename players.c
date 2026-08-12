@@ -309,3 +309,129 @@ int should_renovate(Player* player, int property_index) {
     }
 }
 
+// Add this to the helpers section at the top of players.c
+static int would_complete_monopoly(Player* player, PropertyGroup group) {
+    if (player == NULL) return 0;
+    
+    int owned_in_group = 0;
+    int total_in_group = 0;
+    
+    for (int i = 0; i < MAX_PROPERTIES; i++) {
+        if (property_array[i].color_group == group) {
+            total_in_group++;
+            if (property_array[i].owner_id == player->player_id) {
+                owned_in_group++;
+            }
+        }
+    }
+    
+    // Would complete monopoly if we own ALL BUT ONE property in the group
+    return (owned_in_group == total_in_group - 1 && total_in_group > 0);
+}
+
+
+// AGGRESSIVE INVESTOR SPECIFIC FUNCTIONS
+
+int aggressive_should_buy(Player* player, Property* prop) {
+    // Guard clauses - validate input
+    if (player == NULL || prop == NULL) return 0;
+    if (player->is_bankrupt) return 0;
+    
+    // Check if property is unowned (AI should only be called for unowned properties)
+    if (prop->owner_id != -1) return 0;
+
+    if(player->cash < prop->purchas_price){
+        return 0;
+    }
+
+    // HIGH PRIORITY: Premium properties (Dark Blue - Nuwara Eliya, Galle Face)
+    if (prop->color_group == GROUP_DARK_BLUE || would_complete_monopoly(player, prop->color_group)) {
+        return 1;
+    }
+
+    // Can we afford purchase AND still have at least LKR 500 left for rent?
+    if (player->cash < prop->purchase_price + 500) {
+        return 0;
+    }
+    return 1;
+}
+
+int aggressive_auction_bid(Player* player, Property* prop, int current_bid) {
+    // Guard clauses - validate input
+    if (player == NULL || prop == NULL) return -1;
+    if (player->is_bankrupt) return -1;
+    
+    // Check if player can afford the current bid (minimum to participate)
+    if (current_bid >= player->cash) return -1;
+    
+    // Calculate maximum bid: 120% of property purchase price
+    int max_bid = (prop->purchase_price * 120) / 100;
+    
+    // Calculate next bid (round up to nearest multiple of 250)
+    int next_bid = ((current_bid + 250) / 250) * 250;
+    
+    // Check if next bid exceeds maximum allowed or player's cash
+    if (next_bid <= max_bid && next_bid <= player->cash) {
+        return next_bid;  // Bid this amount
+    }
+    
+    // If cannot bid, withdraw
+    return -1;
+}
+
+int aggressive_should_loan(Player* player) {
+    // Guard clauses - validate input
+    if (player == NULL) return 0;
+    if (player->is_bankrupt) return 0;
+    
+    // Cannot take loan if already has one (only one active loan allowed)
+    if (player->player_loan.is_active) return 0;
+    
+    // Check if any collateral available
+    int max_loan = get_max_loan_amount(player);
+    if (max_loan == 0) return 0;
+    
+    // REASON 1: Complete a monopoly
+    for (int i = 0; i < MAX_PROPERTIES; i++) {
+        Property* prop = &property_array[i];
+        if (prop->owner_id == -1) {
+            if (would_complete_monopoly(player, prop->color_group)) {
+                // Can we afford the property with loan + cash?
+                if (player->cash + max_loan >= prop->purchase_price) {
+                    return 1;
+                }
+            }
+        }
+    }
+    
+    // REASON 2: Build houses on existing monopoly
+    PropertyGroup groups[] = {
+        GROUP_BROWN, GROUP_LIGHT_BLUE, GROUP_PINK, GROUP_ORANGE,
+        GROUP_RED, GROUP_YELLOW, GROUP_GREEN, GROUP_DARK_BLUE
+    };
+    
+    for (int g = 0; g < 8; g++) {
+        if (has_monopoly(player, groups[g])) {
+            // Check if we can build at least 2 houses
+            for (int i = 0; i < MAX_PROPERTIES; i++) {
+                if (property_array[i].color_group == groups[g] &&
+                    property_array[i].owner_id == player->player_id) {
+                    
+                    if (property_array[i].building_count < 4) {
+                        // Check if building would increase rent enough
+                        int current_rent = property_array[i].base_rent;
+                        int future_rent = current_rent * 2;  // With houses
+                        int cost = property_array[i].house_construction_cost;
+                        
+                        // If rent increase > 15% of cost, worth borrowing
+                        if ((future_rent - current_rent) > (cost * 15) / 100) {
+                            return 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    return 0;
+}
