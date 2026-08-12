@@ -353,6 +353,61 @@ int should_buy_insurance(Player* player, int property_index);
 int get_insurance_type(Player* player, int property_index);
 int should_renovate(Player* player, int property_index);
 
+// players.c - Aggressive Investor strategy
+int aggressive_should_buy(Player* player, Property* prop);
+int aggressive_auction_bid(Player* player, Property* prop, int current_bid);
+int aggressive_should_loan(Player* player);
+int aggressive_loan_amount(Player* player);
+int aggressive_should_repay(Player* player);
+int aggressive_should_build(Player* player);
+int aggressive_choose_build(Player* player);
+int aggressive_should_hotel(Player* player);
+int aggressive_choose_hotel(Player* player);
+int aggressive_should_insure(Player* player, int property_index);
+int aggressive_insurance_type(Player* player, int property_index);
+int aggressive_should_renovate(Player* player, int property_index);
+
+// players.c - Conservative Banker strategy
+int conservative_should_buy(Player* player, Property* prop);
+int conservative_auction_bid(Player* player, Property* prop, int current_bid);
+int conservative_should_loan(Player* player);
+int conservative_loan_amount(Player* player);
+int conservative_should_repay(Player* player);
+int conservative_should_build(Player* player);
+int conservative_choose_build(Player* player);
+int conservative_should_hotel(Player* player);
+int conservative_choose_hotel(Player* player);
+int conservative_insurance_type(Player* player, int property_index);
+int conservative_should_renovate(Player* player, int property_index);
+
+// players.c - Risk Taker strategy
+int risk_taker_should_buy(Player* player, Property* prop);
+int risk_taker_auction_bid(Player* player, Property* prop, int current_bid);
+int risk_taker_should_loan(Player* player);
+int risk_taker_loan_amount(Player* player);
+int risk_taker_should_repay(Player* player);
+int risk_taker_should_build(Player* player);
+int risk_taker_choose_build(Player* player);
+int risk_taker_should_hotel(Player* player);
+int risk_taker_choose_hotel(Player* player);
+int risk_taker_should_insure(Player* player, int property_index);
+int risk_taker_insurance_type(Player* player, int property_index);
+int risk_taker_should_renovate(Player* player, int property_index);
+
+// players.c - Opportunistic Trader strategy
+int opportunistic_should_buy(Player* player, Property* prop);
+int opportunistic_auction_bid(Player* player, Property* prop, int current_bid);
+int opportunistic_should_loan(Player* player);
+int opportunistic_loan_amount(Player* player);
+int opportunistic_should_repay(Player* player);
+int opportunistic_should_build(Player* player);
+int opportunistic_choose_build(Player* player);
+int opportunistic_should_hotel(Player* player);
+int opportunistic_choose_hotel(Player* player);
+int opportunistic_should_insure(Player* player, int property_index);
+int opportunistic_insurance_type(Player* player, int property_index);
+int opportunistic_should_renovate(Player* player, int property_index);
+
 
 #endif // TYPES_H
 
