@@ -17,23 +17,6 @@ static int get_group_development_status(Player* player, PropertyGroup group);
 // INTERNAL HELPER FUNCTIONS
 // ============================================
 
-// Calculate Return on Investment for a property
-static int calculate_roi(Player* player, Property* prop) {
-    if (player == NULL || prop == NULL) return 0;
-    if (prop->owner_id != -1) return 0;
-    
-    int cost = prop->purchase_price;
-    int annual_rent = prop->base_rent * 10;  // Estimate 10 visits per round
-    
-    // If completing a monopoly, rent doubles
-    if (has_monopoly(player, prop->color_group)) {
-        annual_rent *= 2;
-    }
-    
-    if (cost == 0) return 0;
-    return (annual_rent * 100) / cost;
-}
-
 // Check if player can afford average rent payment
 static int can_afford_rent(Player* player) {
     if (player == NULL) return 0;
@@ -259,13 +242,13 @@ int should_buy_insurance(Player* player, int property_index) {
     
     switch (player->strategy) {
         case STRATEGY_AGGRESSIVE:
-            return aggressive_should_insure(player, property_index);
+            return aggressive_insurance_type(player, property_index) != INSURANCE_NONE;
         case STRATEGY_CONSERVATIVE:
-            return conservative_should_insure(player, property_index);
+            return conservative_should_insure(player, property_index) != INSURANCE_NONE;
         case STRATEGY_RISK_TAKER:
             return risk_taker_should_insure(player, property_index);
         case STRATEGY_OPPORTUNISTIC:
-            return opportunistic_should_insure(player, property_index);
+            return opportunistic_should_insure(player, property_index) != INSURANCE_NONE;
         default:
             return 0;
     }
@@ -280,11 +263,13 @@ int get_insurance_type(Player* player, int property_index) {
         case STRATEGY_AGGRESSIVE:
             return aggressive_insurance_type(player, property_index);
         case STRATEGY_CONSERVATIVE:
-            return conservative_insurance_type(player, property_index);
+            return conservative_should_insure(player, property_index);
         case STRATEGY_RISK_TAKER:
-            return risk_taker_insurance_type(player, property_index);
+            return risk_taker_should_insure(player, property_index)
+                       ? INSURANCE_BASIC
+                       : INSURANCE_NONE;
         case STRATEGY_OPPORTUNISTIC:
-            return opportunistic_insurance_type(player, property_index);
+            return opportunistic_should_insure(player, property_index);
         default:
             return INSURANCE_NONE;
     }

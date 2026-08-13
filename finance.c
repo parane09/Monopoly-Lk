@@ -132,6 +132,43 @@ void print_player_finance(Player* player) {
 // LOAN SYSTEM
 // ============================================
 
+// Mark a player as bankrupt. Payments or asset transfers to a creditor must be
+// completed by the caller before declaring bankruptcy.
+void declare_bankruptcy(Player* player, const char* reason) {
+    if (player == NULL || player->is_bankrupt) return;
+
+    // Return every remaining asset to the bank so an eliminated player cannot
+    // continue collecting rent.
+    for (int i = 0; i < MAX_PROPERTIES; i++) {
+        Property* prop = &property_array[i];
+        if (prop->owner_id != player->player_id) continue;
+
+        prop->owner_id = -1;
+        prop->is_mortgaged = 0;
+        prop->is_loan_locked = 0;
+        prop->building_count = 0;
+        prop->insurance_policy = INSURANCE_NONE;
+        prop->insurance_rounds_remaining = 0;
+    }
+
+    player->owned_property_count = 0;
+    player->player_loan.is_active = 0;
+    player->player_loan.current_amount = 0;
+    player->player_loan.original_amount = 0;
+    player->player_loan.rounds_remaining = 0;
+    player->player_loan.collateral_count = 0;
+    player->cash = 0;
+    player->is_bankrupt = 1;
+    player->is_in_jail = 0;
+    player->jail_turns_served = 0;
+
+    if (reason != NULL && reason[0] != '\0') {
+        printf("  %s is BANKRUPT: %s.\n", player->player_name, reason);
+    } else {
+        printf("  %s is BANKRUPT!\n", player->player_name);
+    }
+}
+
 // Calculate maximum loan amount a player can get
 // Maximum = 75% of total mortgage value of unmortgaged, unlocked properties
 int get_max_loan_amount(Player* player) {
@@ -329,8 +366,7 @@ void process_loan_default(Player* player) {
     
     // Check if player has any remaining assets
     if (player->owned_property_count == 0 && player->cash <= 0) {
-        player->is_bankrupt = 1;
-        printf("  💀 %s is now BANKRUPT! 💀\n", player->player_name);
+        declare_bankruptcy(player, "no assets remain after loan foreclosure");
     } else {
         printf("  %s continues with remaining assets.\n", player->player_name);
         print_player_finance(player);

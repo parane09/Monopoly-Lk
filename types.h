@@ -283,6 +283,7 @@ int take_loan(Player* player, int amount);
 int repay_loan(Player* player, int amount);
 void apply_loan_interest(Player* player);
 void process_loan_default(Player* player);
+void declare_bankruptcy(Player* player, const char* reason);
 void lock_collateral(Player* player, int loan_amount);
 void unlock_collateral(Player* player);
 
@@ -337,6 +338,8 @@ void process_market_review(GameState* game);
 void process_national_event(GameState* game);
 void process_regional_development(GameState* game);
 void process_government_regulation(GameState* game);
+void buy_property(Player* player, Property* prop);
+void start_auction(GameState* game, Property* prop);
 
 
 // players.c - AI Strategy Prototypes
@@ -363,7 +366,7 @@ int aggressive_should_build(Player* player);
 int aggressive_choose_build(Player* player);
 int aggressive_should_hotel(Player* player);
 int aggressive_choose_hotel(Player* player);
-int aggressive_should_insure(Player* player, int property_index);
+int aggressive_insurance_type(Player* player, int property_index);
 int aggressive_should_renovate(Player* player, int property_index);
 
 // players.c - Conservative Banker strategy
@@ -376,7 +379,7 @@ int conservative_should_build(Player* player);
 int conservative_choose_build(Player* player);
 int conservative_should_hotel(Player* player);
 int conservative_choose_hotel(Player* player);
-int conservative_insurance_type(Player* player, int property_index);
+int conservative_should_insure(Player* player, int property_index);
 int conservative_should_renovate(Player* player, int property_index);
 
 // players.c - Risk Taker strategy
@@ -405,6 +408,5 @@ int opportunistic_choose_hotel(Player* player);
 int opportunistic_should_insure(Player* player, int property_index);
 int opportunistic_should_renovate(Player* player, int property_index);
 
-static int calculate_roi(Player* player, Property* prop); // calculate ROI
 #endif // TYPES_H
 

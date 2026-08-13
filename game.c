@@ -164,7 +164,7 @@ void run_game(GameState* game) {
 
     game->round_number = get_round(game);
 
-    while (game->round_number <= 1 && !game->is_game_over) {
+    while (game->round_number <= 5 && !game->is_game_over) {
         printf("\n========== Round %d ==========\n", game->round_number);
 
         for(int i =0; i<MAX_PLAYERS; i++){
@@ -360,75 +360,40 @@ void resolve_landing(GameState* game, Player* player) {
                 break;
             }
             
-            // Check if unowned
             if (prop->owner_id == -1) {
-                // Property is unowned - offer to buy
-                printf("  %s is available for LKR %d.\n", 
+                printf("  %s is available for LKR %d.\n",
                        prop->property_name, prop->purchase_price);
-                
-                // AI Decision: Should I buy this property?
-                // For now, we'll just print a message
-                // Later: if (should_buy_property(player, prop))
-                printf("  AI will decide whether to purchase...\n");
-                // TODO: Call AI decision function
-                
-                // TEMPORARY: Auto-buy if can afford (for testing)
-                if (player->cash >= prop->purchase_price) {
-                    player->cash -= prop->purchase_price;
-                    prop->owner_id = player->player_id;
-                    
-                    // Add to player's owned properties list
-                    player->owned_property_indices[player->owned_property_count] = square->property_index;
-                    player->owned_property_count++;
-                    
-                    printf("  %s purchased %s for LKR %d.\n", 
-                           player->player_name, prop->property_name, prop->purchase_price);
-                    printf("  Remaining cash: LKR %d\n", player->cash);
+
+                if (should_buy_property(player, prop)) {
+                    buy_property(player, prop);
                 } else {
-                    printf("  %s cannot afford %s. (Need LKR %d, have LKR %d)\n",
-                           player->player_name, prop->property_name,
-                           prop->purchase_price, player->cash);
-                    // TODO: Start auction
+                    start_auction(game, prop);
+                }
+            } else if (prop->owner_id == player->player_id) {
+                printf("  %s already owns this property.\n", player->player_name);
+
+                int property_index = (int)(prop - property_array);
+                if (should_renovate(player, property_index)) {
+                    renovate_property(player, property_index);
                 }
             } else {
-                // Property is owned - pay rent to owner
-                if (prop->is_mortgaged) {
-                    printf("  %s is mortgaged. No rent collected.\n", prop->property_name);
-                    break;
-                }
-                
-                // Don't pay rent to yourself
-                if (prop->owner_id == player->player_id) {
-                    printf("  You own this property.\n");
-                    break;
-                }
-                
-                // Calculate rent
+                Player* owner = &game->players[prop->owner_id];
                 int rent = calculate_rent_with_buildings(prop);
-                
-                // Apply monopoly bonus if owner has monopoly
-                if (has_monopoly(&game->players[prop->owner_id], prop->color_group)) {
-                    // Rent doubles for monopolies
+
+                if (has_monopoly(owner, prop->color_group)) {
                     rent *= 2;
                     printf("  Owner has monopoly! Rent doubled.\n");
                 }
-                
-                // Pay rent
-                Player* owner = &game->players[prop->owner_id];
-                if (player->cash < rent) {
-                    printf("  %s cannot afford rent of LKR %d!\n", 
-                           player->player_name, rent);
-                    // TODO: Handle inability to pay rent (bankruptcy)
-                    // For now, just take all cash
-                    owner->cash += player->cash;
-                    player->cash = 0;
-                    printf("  %s pays LKR %d to %s.\n", 
-                           player->player_name, player->cash, owner->player_name);
-                } else {
-                    player->cash -= rent;
-                    owner->cash += rent;
-                    printf("  %s pays LKR %d rent to %s.\n", 
-                           player->player_name, rent, owner->player_name);
+
+                int amount_paid = (player->cash < rent) ? player->cash : rent;
+                player->cash -= amount_paid;
+                owner->cash += amount_paid;
+
+                printf("  %s pays LKR %d rent to %s.\n",
+                       player->player_name, amount_paid, owner->player_name);
+
+                if (amount_paid < rent) {
+                    declare_bankruptcy(player, "unable to pay the full property rent");
                 }
             }
             break;
@@ -446,14 +411,10 @@ void resolve_landing(GameState* game, Player* player) {
                 printf("  %s is available for LKR %d.\n", 
                        prop->property_name, prop->purchase_price);
                 
-                // TODO: AI decision to buy
-                if (player->cash >= prop->purchase_price) {
-                    player->cash -= prop->purchase_price;
-                    prop->owner_id = player->player_id;
-                    player->owned_property_indices[player->owned_property_count] = square->property_index;
-                    player->owned_property_count++;
-                    printf("  %s purchased %s for LKR %d.\n", 
-                           player->player_name, prop->property_name, prop->purchase_price);
+                if (should_buy_property(player, prop)) {
+                    buy_property(player, prop);
+                } else {
+                    start_auction(game, prop);
                 }
                 break;
             }
@@ -483,10 +444,12 @@ void resolve_landing(GameState* game, Player* player) {
                 
                 // Pay rent
                 if (player->cash < rent) {
-                    owner->cash += player->cash;
+                    int amount_paid = player->cash;
+                    owner->cash += amount_paid;
                     player->cash = 0;
                     printf("  %s pays LKR %d to %s.\n", 
-                           player->player_name, player->cash, owner->player_name);
+                           player->player_name, amount_paid, owner->player_name);
+                    declare_bankruptcy(player, "unable to pay the full railway rent");
                 } else {
                     player->cash -= rent;
                     owner->cash += rent;
@@ -509,13 +472,10 @@ void resolve_landing(GameState* game, Player* player) {
                 printf("  %s is available for LKR %d.\n", 
                        prop->property_name, prop->purchase_price);
                 
-                if (player->cash >= prop->purchase_price) {
-                    player->cash -= prop->purchase_price;
-                    prop->owner_id = player->player_id;
-                    player->owned_property_indices[player->owned_property_count] = square->property_index;
-                    player->owned_property_count++;
-                    printf("  %s purchased %s for LKR %d.\n", 
-                           player->player_name, prop->property_name, prop->purchase_price);
+                if (should_buy_property(player, prop)) {
+                    buy_property(player, prop);
+                } else {
+                    start_auction(game, prop);
                 }
                 break;
             }
@@ -545,10 +505,12 @@ void resolve_landing(GameState* game, Player* player) {
                 
                 // Pay rent
                 if (player->cash < rent) {
-                    owner->cash += player->cash;
+                    int amount_paid = player->cash;
+                    owner->cash += amount_paid;
                     player->cash = 0;
                     printf("  %s pays LKR %d to %s.\n", 
-                           player->player_name, player->cash, owner->player_name);
+                           player->player_name, amount_paid, owner->player_name);
+                    declare_bankruptcy(player, "unable to pay the full utility rent");
                 } else {
                     player->cash -= rent;
                     owner->cash += rent;
@@ -572,17 +534,25 @@ void resolve_landing(GameState* game, Player* player) {
         // ============================================
         case SQUARE_BANK:
             printf("  Landed on Bank of Ceylon.\n");
-            // TODO: Loan actions
-            // For now, just give a loan option
             if (player->player_loan.is_active) {
                 printf("  Active loan: LKR %d (Interest: %d%%)\n",
                        player->player_loan.current_amount,
                        player->player_loan.interest_rate);
-                // TODO: Offer repayment options
+
+                if (should_repay_loan(player)) {
+                    int repayment = player->player_loan.current_amount;
+                    if (repayment > player->cash) repayment = player->cash;
+                    if (repayment > 0) repay_loan(player, repayment);
+                }
             } else {
                 int max_loan = get_max_loan_amount(player);
                 printf("  Maximum loan available: LKR %d\n", max_loan);
-                // TODO: Offer loan
+
+                if (should_take_loan(player)) {
+                    int amount = get_loan_amount(player);
+                    if (amount > max_loan) amount = max_loan;
+                    if (amount > 0) take_loan(player, amount);
+                }
             }
             break;
             
@@ -591,7 +561,16 @@ void resolve_landing(GameState* game, Player* player) {
         // ============================================
         case SQUARE_INSURANCE:
             printf("  Landed on Insurance company.\n");
-            // TODO: Offer insurance purchase
+            for (int i = 0; i < player->owned_property_count; i++) {
+                int property_index = player->owned_property_indices[i];
+
+                if (should_buy_insurance(player, property_index)) {
+                    int policy_type = get_insurance_type(player, property_index);
+                    if (policy_type != INSURANCE_NONE) {
+                        buy_insurance(player, property_index, policy_type);
+                    }
+                }
+            }
             break;
             
         // ============================================
@@ -604,8 +583,7 @@ void resolve_landing(GameState* game, Player* player) {
                 player->cash -= 2000;
                 printf("  %s paid LKR 2,000 income tax.\n", player->player_name);
             } else {
-                printf("  %s cannot afford tax! TODO: Handle bankruptcy.\n", 
-                       player->player_name);
+                declare_bankruptcy(player, "unable to pay income tax");
             }
             break;
             
@@ -767,14 +745,36 @@ void end_of_round_processing(GameState* game) {
                 int has_income = 0;
                 // TODO: Check railways, utilities, event income
                 if (!has_income) {
-                    player->is_bankrupt = 1;
-                    printf("  💀 %s is BANKRUPT!\n", player->player_name);
+                    declare_bankruptcy(player, "no cash, property, or income remains");
                 }
             }
         }
     }
     
     printf("\n=== END OF ROUND %d PROCESSING COMPLETE ===\n", game->round_number);
+}
+
+// Helper function to buy property
+void buy_property(Player* player, Property* prop) {
+    if (player == NULL || prop == NULL) return;
+    if (player->cash < prop->purchase_price) return;
+    
+    player->cash -= prop->purchase_price;
+    prop->owner_id = player->player_id;
+    
+    // Add to player's owned properties
+    player->owned_property_indices[player->owned_property_count] = prop - property_array;
+    player->owned_property_count++;
+    
+    printf("  %s purchased %s for LKR %d.\n", 
+           player->player_name, prop->property_name, prop->purchase_price);
+}
+
+// Helper function to start auction
+void start_auction(GameState* game, Property* prop) {
+    printf("  Auction started for %s...\n", prop->property_name);
+    // TODO: Implement full auction system
+    // For now, just print
 }
 
 
