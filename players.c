@@ -1324,3 +1324,355 @@ int risk_taker_should_renovate(Player* player, int property_index) {
     
     return 1;
 }
+
+// Oppurtunistic trader SPECIFIC FUNCTIONS
+
+// Calculate ROI (Return on Investment) for a property
+static int calculate_roi(Player* player, Property* prop) {
+    if (player == NULL || prop == NULL) return 0;
+    if (prop->owner_id != -1) return 0;
+    
+    int cost = prop->purchase_price;
+    int annual_rent = prop->base_rent * 10;  // Estimate 10 visits per round
+    
+    // If completing a monopoly, rent doubles
+    if (would_complete_monopoly(player, prop->color_group)) {
+        annual_rent *= 2;
+    }
+    
+    if (cost == 0) return 0;
+    return (annual_rent * 100) / cost;
+}
+
+int opportunistic_should_buy(Player* player, Property* prop) {
+    if (player == NULL || prop == NULL) return 0;
+    if (player->is_bankrupt) return 0;
+    if (prop->owner_id != -1) return 0;
+    if (prop->owner_id == player->player_id) return 0;
+    
+    // Opportunistic Trader: Buy if projected appreciation exceeds construction costs
+    // For now, use ROI > 10% as a proxy
+    int roi = calculate_roi(player, prop);
+    
+    // Also check if can afford
+    if (player->cash < prop->purchase_price) return 0;
+    
+    // Buy if ROI > 10% (good investment)
+    if (roi > 10) {
+        return 1;
+    }
+    
+    // Special case: Would complete a monopoly
+    if (would_complete_monopoly(player, prop->color_group)) {
+        return 1;
+    }
+    
+    return 0;
+}
+
+int opportunistic_auction_bid(Player* player, Property* prop, int current_bid) {
+    if (player == NULL || prop == NULL) return -1;
+    if (player->is_bankrupt) return -1;
+    
+    // Can't bid if we can't afford current bid
+    if (current_bid >= player->cash) return -1;
+    
+    // Calculate ROI to determine max bid
+    int roi = calculate_roi(player, prop);
+    
+    // Max bid based on ROI:
+    // ROI > 20% → bid up to 110% of value
+    // ROI > 15% → bid up to 105% of value
+    // ROI > 10% → bid up to 100% of value
+    // ROI <= 10% → don't bid
+    int max_bid = 0;
+    
+    if (roi > 20) {
+        max_bid = (prop->purchase_price * 110) / 100;
+    } else if (roi > 15) {
+        max_bid = (prop->purchase_price * 105) / 100;
+    } else if (roi > 10) {
+        max_bid = prop->purchase_price;
+    } else {
+        return -1;  // ROI too low, withdraw
+    }
+    
+    // Also consider 50% cash rule (buying property leaves some cash)
+    int cash_after = player->cash - current_bid;
+    if (cash_after < player->cash / 2) {
+        // Would leave less than 50% cash, reduce max bid
+        int safe_bid = player->cash / 2;
+        if (safe_bid < max_bid) {
+            max_bid = safe_bid;
+        }
+    }
+    
+    // Calculate next bid
+    int next_bid = ((current_bid + 250) / 250) * 250;
+    
+    if (next_bid <= max_bid && next_bid <= player->cash) {
+        return next_bid;
+    }
+    
+    return -1;  // Withdraw
+}
+
+int opportunistic_should_loan(Player* player) {
+    if (player == NULL) return 0;
+    if (player->is_bankrupt) return 0;
+    if (player->player_loan.is_active) return 0;
+    
+    int max_loan = get_max_loan_amount(player);
+    if (max_loan == 0) return 0;
+    
+    // Opportunistic Trader: Take loan if projected return exceeds borrowing cost
+    // For now, check if there's any property with ROI > 15%
+    for (int i = 0; i < MAX_PROPERTIES; i++) {
+        Property* prop = &property_array[i];
+        if (prop->owner_id == -1) {
+            int roi = calculate_roi(player, prop);
+            if (roi > 15) {
+                return 1;  // Good investment opportunity
+            }
+        }
+    }
+    
+    // Also check if loan would complete a monopoly
+    for (int i = 0; i < MAX_PROPERTIES; i++) {
+        Property* prop = &property_array[i];
+        if (prop->owner_id == -1) {
+            if (would_complete_monopoly(player, prop->color_group)) {
+                if (player->cash + max_loan >= prop->purchase_price) {
+                    return 1;
+                }
+            }
+        }
+    }
+    
+    return 0;
+}
+
+int opportunistic_loan_amount(Player* player) {
+    if (player == NULL) return 0;
+    if (player->is_bankrupt) return 0;
+    
+    int max_loan = get_max_loan_amount(player);
+    if (max_loan == 0) return 0;
+    
+    // Opportunistic Trader: Borrow 70% of max to leave room
+    int loan_amount = (max_loan * 70) / 100;
+    
+    // Round down to nearest 1000
+    loan_amount = (loan_amount / 1000) * 1000;
+    
+    // Ensure minimum loan
+    if (loan_amount < 1000 && max_loan >= 1000) {
+        loan_amount = 1000;
+    }
+    
+    return loan_amount;
+}
+
+int opportunistic_should_repay(Player* player) {
+    if (player == NULL) return 0;
+    if (player->is_bankrupt) return 0;
+    if (!player->player_loan.is_active) return 0;
+    
+    // Opportunistic Trader: Repay if no good investment opportunities
+    // Check if there are any properties with ROI > current loan interest rate
+    int interest_rate = player->player_loan.interest_rate;
+    
+    for (int i = 0; i < MAX_PROPERTIES; i++) {
+        Property* prop = &property_array[i];
+        if (prop->owner_id == -1) {
+            int roi = calculate_roi(player, prop);
+            if (roi > interest_rate) {
+                return 0;  // Keep loan, invest instead
+            }
+        }
+    }
+    
+    // No good opportunities - repay the loan
+    return 1;
+}
+
+int opportunistic_should_build(Player* player) {
+    if (player == NULL) return 0;
+    if (player->is_bankrupt) return 0;
+    
+    // Check all color groups for monopoly
+    PropertyGroup groups[] = {
+        GROUP_BROWN, GROUP_LIGHT_BLUE, GROUP_PINK, GROUP_ORANGE,
+        GROUP_RED, GROUP_YELLOW, GROUP_GREEN, GROUP_DARK_BLUE
+    };
+    
+    for (int g = 0; g < 8; g++) {
+        if (has_monopoly(player, groups[g])) {
+            // Check if any property in this group can be built on
+            for (int i = 0; i < MAX_PROPERTIES; i++) {
+                if (property_array[i].color_group == groups[g] &&
+                    property_array[i].owner_id == player->player_id) {
+                    
+                    if (property_array[i].building_count < 4) {
+                        // Check if can afford at least one house
+                        if (player->cash >= property_array[i].house_construction_cost) {
+                            return 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    return 0;
+}
+
+int opportunistic_choose_build(Player* player) {
+    if (player == NULL) return -1;
+    if (player->is_bankrupt) return -1;
+    
+    // Opportunistic Trader uses standard even building rule
+    // But priorities groups that are currently booming (future enhancement)
+    // For now, use default order: DARK_BLUE > GREEN > YELLOW > RED > ORANGE > PINK > LIGHT_BLUE > BROWN
+    
+    PropertyGroup groups[] = {
+        GROUP_DARK_BLUE, GROUP_GREEN, GROUP_YELLOW, GROUP_RED,
+        GROUP_ORANGE, GROUP_PINK, GROUP_LIGHT_BLUE, GROUP_BROWN
+    };
+    
+    for (int g = 0; g < 8; g++) {
+        if (has_monopoly(player, groups[g])) {
+            // Find property with fewest buildings
+            int min_buildings = 999;
+            int chosen = -1;
+            
+            for (int i = 0; i < MAX_PROPERTIES; i++) {
+                if (property_array[i].color_group == groups[g] &&
+                    property_array[i].owner_id == player->player_id) {
+                    
+                    if (property_array[i].building_count >= 4) continue;
+                    
+                    if (property_array[i].building_count < min_buildings) {
+                        min_buildings = property_array[i].building_count;
+                        chosen = i;
+                    }
+                }
+            }
+            
+            if (chosen != -1) {
+                return chosen;
+            }
+        }
+    }
+    
+    return -1;
+}
+
+int opportunistic_should_hotel(Player* player) {
+    if (player == NULL) return 0;
+    if (player->is_bankrupt) return 0;
+    
+    // Opportunistic Trader: Build hotel if profitable
+    // For now, check if any property has 4 houses
+    for (int i = 0; i < MAX_PROPERTIES; i++) {
+        Property* prop = &property_array[i];
+        
+        if (prop->owner_id == player->player_id && prop->building_count == 4) {
+            // Can we afford hotel?
+            if (player->cash >= prop->hotel_construction_cost) {
+                // Calculate ROI on hotel upgrade
+                int current_rent = prop->base_rent * 7;  // 4 houses = 7x
+                int future_rent = prop->base_rent * 10;  // Hotel = 10x
+                int rent_increase = future_rent - current_rent;
+                int cost = prop->hotel_construction_cost;
+                
+                // ROI = rent increase / cost
+                if (rent_increase * 100 / cost > 10) {  // > 10% ROI
+                    return 1;
+                }
+            }
+        }
+    }
+    
+    return 0;
+}
+
+int opportunistic_choose_hotel(Player* player) {
+    if (player == NULL) return -1;
+    if (player->is_bankrupt) return -1;
+    
+    // Opportunistic Trader: Choose most valuable property with 4 houses
+    int highest_value = 0;
+    int chosen = -1;
+    
+    for (int i = 0; i < MAX_PROPERTIES; i++) {
+        Property* prop = &property_array[i];
+        
+        if (prop->owner_id == player->player_id && prop->building_count == 4) {
+            int value = get_property_value(prop);
+            if (value > highest_value) {
+                highest_value = value;
+                chosen = i;
+            }
+        }
+    }
+    
+    return chosen;
+}
+
+int opportunistic_should_insure(Player* player, int property_index) {
+    if (player == NULL) return 0;
+    if (player->is_bankrupt) return 0;
+    if (property_index < 0 || property_index >= MAX_PROPERTIES) return 0;
+    
+    Property* prop = &property_array[property_index];
+    
+    if (prop->owner_id != player->player_id) return 0;
+    if (prop->insurance_policy != INSURANCE_NONE) return 0;
+    if (prop->building_count == 0) return 0;
+    
+    // Opportunistic Trader: Purchase Comprehensive Insurance only for high-value developments
+    int property_value = get_property_value(prop);
+    
+    // Only insure properties worth more than LKR 20,000
+    if (property_value < 20000) {
+        return 0;
+    }
+    
+    // Check if can afford premium
+    int premium = calculate_insurance_premium(prop, INSURANCE_COMPREHENSIVE);
+    if (premium > player->cash) {
+        return 0;
+    }
+    
+    return INSURANCE_COMPREHENSIVE;
+}
+
+int opportunistic_should_renovate(Player* player, int property_index) {
+    if (player == NULL) return 0;
+    if (player->is_bankrupt) return 0;
+    if (property_index < 0 || property_index >= MAX_PROPERTIES) return 0;
+    
+    Property* prop = &property_array[property_index];
+    
+    if (prop->owner_id != player->player_id) return 0;
+    if (prop->building_count == 0) return 0;
+    
+    // Opportunistic Trader: Renovate when depreciation exceeds 15%
+    int depreciation = calculate_depreciation(prop);
+    if (depreciation <= 15) {
+        return 0;
+    }
+    
+    // Check if can afford renovation
+    int property_value = get_property_value(prop);
+    int renovation_cost = (property_value * 10) / 100;
+    
+    if (renovation_cost > player->cash) {
+        return 0;
+    }
+    
+    return 1;
+}
+
+

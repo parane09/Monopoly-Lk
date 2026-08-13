@@ -405,6 +405,6 @@ int opportunistic_choose_hotel(Player* player);
 int opportunistic_should_insure(Player* player, int property_index);
 int opportunistic_should_renovate(Player* player, int property_index);
 
-
+static int calculate_roi(Player* player, Property* prop); // calculate ROI
 #endif // TYPES_H
 
