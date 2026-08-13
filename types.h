@@ -364,7 +364,6 @@ int aggressive_choose_build(Player* player);
 int aggressive_should_hotel(Player* player);
 int aggressive_choose_hotel(Player* player);
 int aggressive_should_insure(Player* player, int property_index);
-int aggressive_insurance_type(Player* player, int property_index);
 int aggressive_should_renovate(Player* player, int property_index);
 
 // players.c - Conservative Banker strategy
@@ -391,7 +390,6 @@ int risk_taker_choose_build(Player* player);
 int risk_taker_should_hotel(Player* player);
 int risk_taker_choose_hotel(Player* player);
 int risk_taker_should_insure(Player* player, int property_index);
-int risk_taker_insurance_type(Player* player, int property_index);
 int risk_taker_should_renovate(Player* player, int property_index);
 
 // players.c - Opportunistic Trader strategy
@@ -405,7 +403,6 @@ int opportunistic_choose_build(Player* player);
 int opportunistic_should_hotel(Player* player);
 int opportunistic_choose_hotel(Player* player);
 int opportunistic_should_insure(Player* player, int property_index);
-int opportunistic_insurance_type(Player* player, int property_index);
 int opportunistic_should_renovate(Player* player, int property_index);
 
 

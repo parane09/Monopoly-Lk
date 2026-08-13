@@ -729,3 +729,598 @@ int aggressive_should_renovate(Player* player, int property_index) {
     return 1;  // Renovate!
 }
 
+// CONSERVATIVE BANKER SPECIFIC FUNCTIONS
+
+int conservative_should_buy(Player* player, Property* prop) {
+    // Guard clauses - validate input
+    if (player == NULL || prop == NULL) return 0;
+    if (player->is_bankrupt) return 0;
+    
+    // Check if property is unowned
+    if (prop->owner_id != -1) return 0;
+    
+    // Check if player somehow already owns this property
+    if (prop->owner_id == player->player_id) return 0;
+
+        // PREFERENCE: Railways and Utilities (predictable income)
+    if (prop->color_group == GROUP_RAILWAY || prop->color_group == GROUP_UTILITY) {
+        if(player->cash > prop->purchase_price){
+            return 1;
+        }  // High priority
+    }
+    
+    // Conservative Banker Rule:
+    // After purchase, at least 50% of current cash must remain
+    int cash_before = player->cash;
+    int cash_after = cash_before - prop->purchase_price;
+    
+    // Need at least 50% of cash to remain
+    if (cash_after < cash_before / 2) {
+        return 0;  // Too expensive - would leave less than 50% cash
+    }
+}
+
+int conservative_auction_bid(Player* player, Property* prop, int current_bid) {
+    // Guard clauses - validate input
+    if (player == NULL || prop == NULL) return -1;
+    if (player->is_bankrupt) return -1;
+    
+    // Can't bid if we can't afford the current bid
+    if (current_bid >= player->cash) return -1;
+    
+    // Conservative Banker Rule:
+    // Maximum bid is the property's purchase price (market value)
+    // Will NEVER bid above market value
+    int max_bid = prop->purchase_price;
+    
+    // Also apply the 50% cash rule from buying
+    // After winning auction, at least 50% cash must remain
+    int cash_after_bid = player->cash - current_bid;
+    if (cash_after_bid < player->cash / 2) {
+        return -1;  // Would leave less than 50% cash
+    }
+    
+    // Calculate next bid (round up to nearest multiple of 250)
+    int next_bid = ((current_bid + 250) / 250) * 250;
+    
+    // Check if next bid is within limits
+    if (next_bid <= max_bid && next_bid <= player->cash) {
+        return next_bid;
+    }
+    
+    return -1;  // Withdraw - cannot bid at or above market value
+}
+
+int conservative_should_loan(Player* player) {
+    // Guard clauses - validate input
+    if (player == NULL) return 0;
+    if (player->is_bankrupt) return 0;
+    
+    // Cannot take loan if already has one
+    if (player->player_loan.is_active) return 0;
+    
+    // Check if any collateral available
+    int max_loan = get_max_loan_amount(player);
+    if (max_loan == 0) return 0;
+    
+    // Conservative Banker Rule:
+    // ONLY take loan if bankruptcy is imminent
+    
+    // Check 1: Cash below LKR 2,000 AND no properties to sell
+    if (player->cash < 2000) { // average rent
+        return 1;  // Imminent bankruptcy!
+    }
+
+    return 0;
+}
+
+int conservative_loan_amount(Player* player) {
+    // Guard clauses - validate input
+    if (player == NULL) return 0;
+    if (player->is_bankrupt) return 0;
+    
+    // Calculate maximum possible loan
+    int max_loan = get_max_loan_amount(player);
+    if (max_loan == 0) return 0;
+    
+    // Conservative Banker Rule:
+    // Only borrow enough to reach LKR 5,000 (safe reserve)
+    // This is the minimum cash they want to have
+    int target_cash = 5000;
+    int needed = target_cash - player->cash;
+    
+    // If cash is already above target, don't borrow
+    if (needed <= 0) return 0;
+    
+    // Only borrow what's needed, rounded up to nearest 1000
+    int loan_amount = ((needed + 999) / 1000) * 1000;
+    
+    // Ensure loan doesn't exceed maximum
+    if (loan_amount > max_loan) {
+        loan_amount = max_loan;
+    }
+    
+    // Minimum loan amount (if less than 1000, round up to 1000)
+    if (loan_amount < 1000 && loan_amount > 0) {
+        loan_amount = 1000;
+    }
+    
+    return loan_amount;
+}
+
+int conservative_should_repay(Player* player) {
+    // Guard clauses - validate input
+    if (player == NULL) return 0;
+    if (player->is_bankrupt) return 0;
+    
+    // Can only repay if there's an active loan
+    if (!player->player_loan.is_active) return 0;
+    
+    // Conservative Banker Rule:
+    // Repay immediately if sufficient funds exist
+    // "Sufficient funds" means: can repay the ENTIRE loan AND still have LKR 2,000 left
+    
+    int loan_amount = player->player_loan.current_amount;
+
+    if (player->cash >= loan_amount) {
+        return 1;  // Repay the full loan
+    }
+    
+    
+    return 0;  // Can't afford to repay
+}
+
+int conservative_should_build(Player* player) {
+    // Guard clauses - validate input
+    if (player == NULL) return 0;
+    if (player->is_bankrupt) return 0;
+    
+    
+    // Conservative Banker Rule 2:
+    // Must maintain cash reserve of LKR 5,000
+    int reserve = 5000;
+    
+    // Check all color groups for monopoly
+    PropertyGroup groups[] = {
+        GROUP_BROWN, GROUP_LIGHT_BLUE, GROUP_PINK, GROUP_ORANGE,
+        GROUP_RED, GROUP_YELLOW, GROUP_GREEN, GROUP_DARK_BLUE
+    };
+    
+    for (int g = 0; g < 8; g++) {
+        if (has_monopoly(player, groups[g])) {
+            
+            // Check if any property in this group can be built on
+            int can_build = 0;
+            int total_cost = 0;
+            
+            for (int i = 0; i < MAX_PROPERTIES; i++) {
+                if (property_array[i].color_group == groups[g] &&
+                    property_array[i].owner_id == player->player_id) {
+                    
+                    // Only build houses (max 4), not hotels
+                    if (property_array[i].building_count < 4) {
+                        can_build = 1;
+                        total_cost += property_array[i].house_construction_cost;
+                    }
+                }
+            }
+            
+            // Can we afford to build AND keep LKR 5,000 reserve?
+            if (can_build && player->cash >= total_cost + reserve) {
+                return 1;  // Build houses
+            }
+        }
+    }
+    
+    return 0;  // No building
+}
+
+int conservative_choose_build(Player* player) {
+    // Guard clauses - validate input
+    if (player == NULL) return -1;
+    if (player->is_bankrupt) return -1;
+    
+    // Check all color groups for monopoly
+    PropertyGroup groups[] = {
+        GROUP_BROWN, GROUP_LIGHT_BLUE, GROUP_PINK, GROUP_ORANGE,
+        GROUP_RED, GROUP_YELLOW, GROUP_GREEN, GROUP_DARK_BLUE
+    };
+    
+    // Priority: Find first monopoly group with room to build
+    for (int g = 0; g < 8; g++) {
+        if (has_monopoly(player, groups[g])) {
+            
+            // Find property with FEWEST buildings in this group
+            int min_buildings = 999;
+            int chosen_property = -1;
+            
+            for (int i = 0; i < MAX_PROPERTIES; i++) {
+                if (property_array[i].color_group == groups[g] &&
+                    property_array[i].owner_id == player->player_id) {
+                    
+                    // Skip properties that already have 4 houses (can't build more)
+                    if (property_array[i].building_count >= 4) continue;
+                    
+                    // Find the property with the fewest buildings
+                    if (property_array[i].building_count < min_buildings) {
+                        min_buildings = property_array[i].building_count;
+                        chosen_property = i;
+                    }
+                }
+            }
+            
+            // If we found a property to build on, return it
+            if (chosen_property != -1) {
+                return chosen_property;
+            }
+        }
+    }
+    
+    return -1;  // No buildable property found
+}
+
+int conservative_should_hotel(Player* player) {
+    // Guard clauses - validate input
+    if (player == NULL) return 0;
+    if (player->is_bankrupt) return 0;
+    
+    // Conservative Banker Rule 1:
+    // NO hotels if there are active loans
+    if (player->player_loan.is_active) {
+        return 0;  // Must settle loans first
+    }
+    
+    // Conservative Banker Rule 2:
+    // Must maintain cash reserve of LKR 5,000
+    int reserve = 5000;
+    
+    // Check all properties owned by player
+    for (int i = 0; i < MAX_PROPERTIES; i++) {
+        Property* prop = &property_array[i];
+        
+        // Check if player owns this property and it has 4 houses
+        if (prop->owner_id == player->player_id && prop->building_count == 4) {
+            
+            // Check if player can afford hotel AND keep LKR 5,000 reserve
+            int hotel_cost = prop->hotel_construction_cost;
+            
+            if (player->cash >= hotel_cost + reserve) {
+                return 1;  // Build hotel!
+            }
+        }
+    }
+    
+    return 0;  // No property ready for hotel upgrade
+}
+
+int conservative_choose_hotel(Player* player) {
+    // Guard clauses - validate input
+    if (player == NULL) return -1;
+    if (player->is_bankrupt) return -1;
+    
+    // Check all properties owned by player
+    // Choose the first property with 4 houses
+    for (int i = 0; i < MAX_PROPERTIES; i++) {
+        Property* prop = &property_array[i];
+        
+        // Check if player owns this property and it has 4 houses
+        if (prop->owner_id == player->player_id && prop->building_count == 4) {
+            return i;  // Return first property with 4 houses
+        }
+    }
+    
+    return -1;  // No property ready for hotel upgrade
+}
+
+int conservative_should_insure(Player* player, int property_index) {
+    // Guard clauses - validate input
+    if (player == NULL) return 0;
+    if (player->is_bankrupt) return 0;
+    if (property_index < 0 || property_index >= MAX_PROPERTIES) return 0;
+    
+    Property* prop = &property_array[property_index];
+    
+    // Check if player owns this property
+    if (prop->owner_id != player->player_id) return 0;
+    
+    // Check if property already has insurance
+    if (prop->insurance_policy != INSURANCE_NONE) return 0;
+    
+    // Conservative Banker Rule:
+    // Always insure developed properties (has buildings)
+    if (prop->building_count == 0) return 0;  // No buildings = no insurance
+    
+    // Check if player can afford the premium
+    int premium = calculate_insurance_premium(prop, INSURANCE_COMPREHENSIVE);
+    if (premium > player->cash) return 0;
+    
+    return INSURANCE_COMPREHENSIVE;  // Buy Comprehensive Insurance
+}
+
+int conservative_should_renovate(Player* player, int property_index) {
+    // Guard clauses - validate input
+    if (player == NULL) return 0;
+    if (player->is_bankrupt) return 0;
+    if (property_index < 0 || property_index >= MAX_PROPERTIES) return 0;
+    
+    Property* prop = &property_array[property_index];
+    
+    // Check if player owns this property
+    if (prop->owner_id != player->player_id) return 0;
+    
+    // Check if property has buildings (only developed properties need renovation)
+    if (prop->building_count == 0) return 0;
+    
+    // Check depreciation level
+    int depreciation = calculate_depreciation(prop);
+    
+    // Conservative Banker Rule:
+    // Renovate when depreciation exceeds 10%
+    if (depreciation <= 10) {
+        return 0;  // Not depreciated enough
+    }
+    
+    // Calculate renovation cost: 10% of current property value
+    int property_value = get_property_value(prop);
+    int renovation_cost = (property_value * 10) / 100;
+    
+    // Conservative Banker Rule:
+    // Must maintain LKR 5,000 cash reserve after renovation
+    int reserve = 5000;
+    int cash_after = player->cash - renovation_cost;
+    
+    if (cash_after < reserve) {
+        return 0;  // Would drop below reserve
+    }
+    
+    return 1;  // Renovate
+}
+
+// RISK TAKER SPECIFIC FUNCTIONS
+
+int risk_taker_should_buy(Player* player, Property* prop) {
+    // Guard clauses - validate input
+    if (player == NULL || prop == NULL) return 0;
+    if (player->is_bankrupt) return 0;
+    
+    // Check if property is unowned
+    if (prop->owner_id != -1) return 0;
+    
+    // Check if player somehow already owns this property
+    if (prop->owner_id == player->player_id) return 0;
+    
+    // Risk Taker Rule:
+    // BUY EVERYTHING - as long as it's affordable
+    // No cash reserve requirement - can leave LKR 0
+    
+    // Check if player can afford the property (at minimum)
+    if (player->cash >= prop->purchase_price) {
+        return 1;  // Buy it!
+    }
+    
+    // Can't afford it - maybe sell something first?
+    // This is handled elsewhere (selling logic)
+    return 0;
+}
+
+int risk_taker_auction_bid(Player* player, Property* prop, int current_bid) {
+    if (player == NULL || prop == NULL) return -1;
+    if (player->is_bankrupt) return -1;
+    
+    // Can't bid if we can't afford current bid
+    if (current_bid >= player->cash) return -1;
+    
+    // Calculate next bid (round up to nearest 250)
+    int next_bid = ((current_bid + 250) / 250) * 250;
+    
+    // Bid until cash is exhausted - no maximum limit
+    if (next_bid <= player->cash) {
+        return next_bid;
+    }
+    
+    return -1;  // Withdraw - can't afford next bid
+}
+
+int risk_taker_should_loan(Player* player) {
+    if (player == NULL) return 0;
+    if (player->is_bankrupt) return 0;
+    
+    // Already has a loan - can't take another
+    if (player->player_loan.is_active) return 0;
+    
+    // Check if any collateral available
+    int max_loan = get_max_loan_amount(player);
+    if (max_loan == 0) return 0;
+    
+    // Risk Taker: Always borrows the maximum loan permitted
+    return 1;
+}
+
+int risk_taker_loan_amount(Player* player) {
+    if (player == NULL) return 0;
+    if (player->is_bankrupt) return 0;
+    
+    int max_loan = get_max_loan_amount(player);
+    if (max_loan == 0) return 0;
+    
+    // Risk Taker: Takes maximum loan permitted
+    return max_loan;
+}
+
+int risk_taker_should_repay(Player* player) {
+    // Risk Taker: Never repays loans
+    // (Refinancing is handled separately when visiting Bank)
+    return 0;
+}
+
+int risk_taker_should_build(Player* player) {
+    if (player == NULL) return 0;
+    if (player->is_bankrupt) return 0;
+    
+    // Check all color groups for monopoly
+    PropertyGroup groups[] = {
+        GROUP_BROWN, GROUP_LIGHT_BLUE, GROUP_PINK, GROUP_ORANGE,
+        GROUP_RED, GROUP_YELLOW, GROUP_GREEN, GROUP_DARK_BLUE
+    };
+    
+    for (int g = 0; g < 8; g++) {
+        if (has_monopoly(player, groups[g])) {
+            // Check if any property in this group can be built on
+            for (int i = 0; i < MAX_PROPERTIES; i++) {
+                if (property_array[i].color_group == groups[g] &&
+                    property_array[i].owner_id == player->player_id) {
+                    
+                    // Can build if less than 4 houses
+                    if (property_array[i].building_count < 4) {
+                        // Check if can afford at least one house
+                        if (player->cash >= property_array[i].house_construction_cost) {
+                            return 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    return 0;
+}
+
+int risk_taker_choose_build(Player* player) {
+    if (player == NULL) return -1;
+    if (player->is_bankrupt) return -1;
+    
+    // Risk Taker: Prioritize expensive property groups
+    // Order: DARK_BLUE > GREEN > YELLOW > RED > ORANGE > PINK > LIGHT_BLUE > BROWN
+    PropertyGroup groups[] = {
+        GROUP_DARK_BLUE, GROUP_GREEN, GROUP_YELLOW, GROUP_RED,
+        GROUP_ORANGE, GROUP_PINK, GROUP_LIGHT_BLUE, GROUP_BROWN
+    };
+    
+    for (int g = 0; g < 8; g++) {
+        if (has_monopoly(player, groups[g])) {
+            // Find property with fewest buildings in this group
+            int min_buildings = 999;
+            int chosen = -1;
+            
+            for (int i = 0; i < MAX_PROPERTIES; i++) {
+                if (property_array[i].color_group == groups[g] &&
+                    property_array[i].owner_id == player->player_id) {
+                    
+                    if (property_array[i].building_count >= 4) continue;
+                    
+                    if (property_array[i].building_count < min_buildings) {
+                        min_buildings = property_array[i].building_count;
+                        chosen = i;
+                    }
+                }
+            }
+            
+            if (chosen != -1) {
+                return chosen;
+            }
+        }
+    }
+    
+    return -1;
+}
+
+int risk_taker_should_hotel(Player* player) {
+    if (player == NULL) return 0;
+    if (player->is_bankrupt) return 0;
+    
+    // Risk Taker: Hotels as early as possible
+    for (int i = 0; i < MAX_PROPERTIES; i++) {
+        Property* prop = &property_array[i];
+        
+        if (prop->owner_id == player->player_id && prop->building_count == 4) {
+            // Check if can afford hotel cost
+            if (player->cash >= prop->hotel_construction_cost) {
+                return 1;
+            }
+        }
+    }
+    
+    return 0;
+}
+
+int risk_taker_choose_hotel(Player* player) {
+    if (player == NULL) return -1;
+    if (player->is_bankrupt) return -1;
+    
+    // Risk Taker: Choose the most expensive property with 4 houses
+    int highest_value = 0;
+    int chosen = -1;
+    
+    for (int i = 0; i < MAX_PROPERTIES; i++) {
+        Property* prop = &property_array[i];
+        
+        if (prop->owner_id == player->player_id && prop->building_count == 4) {
+            int value = get_property_value(prop);
+            if (value > highest_value) {
+                highest_value = value;
+                chosen = i;
+            }
+        }
+    }
+    
+    return chosen;
+}
+
+int risk_taker_should_insure(Player* player, int property_index) {
+    if (player == NULL) return 0;
+    if (player->is_bankrupt) return 0;
+    if (property_index < 0 || property_index >= MAX_PROPERTIES) return 0;
+    
+    Property* prop = &property_array[property_index];
+    
+    // Check if player owns this property
+    if (prop->owner_id != player->player_id) return 0;
+    
+    // Check if property already has insurance
+    if (prop->insurance_policy != INSURANCE_NONE) return 0;
+    
+    // Check if property has buildings
+    if (prop->building_count == 0) return 0;
+    
+    // Risk Taker Rule:
+    // Purchases insurance only after experiencing a financial loss
+    // For now, check if player has ever suffered a disaster loss
+    // This could be tracked in player struct with a flag like 'has_suffered_loss'
+    
+    // Simplified: Risk Taker never buys insurance proactively
+    // They only buy if they've already lost money to a disaster
+    // Since we don't track losses yet, they never buy
+    return 0;
+}
+
+int risk_taker_should_renovate(Player* player, int property_index) {
+    if (player == NULL) return 0;
+    if (player->is_bankrupt) return 0;
+    if (property_index < 0 || property_index >= MAX_PROPERTIES) return 0;
+    
+    Property* prop = &property_array[property_index];
+    
+    // Check if player owns this property
+    if (prop->owner_id != player->player_id) return 0;
+    
+    // Check if property has buildings
+    if (prop->building_count == 0) return 0;
+    
+    // Risk Taker Rule:
+    // Ignores property depreciation until repair becomes unavoidable
+    // Only renovate when depreciation exceeds 20%
+    int depreciation = calculate_depreciation(prop);
+    if (depreciation <= 20) {
+        return 0;
+    }
+    
+    // Check if can afford renovation
+    int property_value = get_property_value(prop);
+    int renovation_cost = (property_value * 10) / 100;
+    
+    if (renovation_cost > player->cash) {
+        return 0;
+    }
+    
+    return 1;
+}
