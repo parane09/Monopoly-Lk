@@ -164,7 +164,7 @@ void run_game(GameState* game) {
 
     game->round_number = get_round(game);
 
-    while (game->round_number <= 5 && !game->is_game_over) {
+    while (game->round_number <= MAX_ROUNDS && !game->is_game_over) {
         printf("\n========== Round %d ==========\n", game->round_number);
 
         for(int i =0; i<MAX_PLAYERS; i++){
@@ -748,6 +748,17 @@ void end_of_round_processing(GameState* game) {
                     declare_bankruptcy(player, "no cash, property, or income remains");
                 }
             }
+        }
+    }
+    // print finances
+    printf("\n....printing finances....\n");
+    for(int i = 0; i < MAX_PLAYERS; i++){
+        Player* player = &game->players[i];
+        if(player->is_bankrupt){
+            printf("%s:  BANKRUPT\n", player->player_name);
+        }
+        else{
+            print_player_finance(player);
         }
     }
     
