@@ -359,7 +359,7 @@ Player* determine_winner(GameState* game) {
 void print_winner_details(const Player* winner) {
     printf("\n=============================================\n");
     printf("                 GAME OVER\n");
-    printf("\n=============================================\n");
+    printf("=============================================\n");
     if (winner == NULL) {
         printf("Winner\nNone - all players are bankrupt\n");
         printf("=============================================\n");
@@ -370,17 +370,17 @@ void print_winner_details(const Player* winner) {
         calculate_total_property_value((Player*)winner);
     int net_worth = calculate_net_worth((Player*)winner);
 
-    printf("Winner\n%s\n", winner->player_name);
-    printf("Total Cash\nLKR %d\n", winner->cash);
-    printf("Total Property Value\nLKR %d\n", total_property_value);
-    printf("Outstanding Loans\n");
+    printf("Winner\n  %s\n", winner->player_name);
+    printf("Total Cash\n  LKR %d\n", winner->cash);
+    printf("Total Property Value\n  LKR %d\n", total_property_value);
+    printf("Outstanding Loans\n  ");
     if (winner->player_loan.is_active &&
         winner->player_loan.current_amount > 0) {
         printf("LKR %d\n", winner->player_loan.current_amount);
     } else {
         printf("None\n");
     }
-    printf("Net Worth\nLKR %d\n", net_worth);
+    printf("Net Worth\n  LKR %d\n", net_worth);
     printf("=============================================\n");
 }
 
