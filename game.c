@@ -275,7 +275,7 @@ void run_game(GameState* game) {
 
     game->is_game_over = 1;
     Player* winner = determine_winner(game);
-    print_winner_details(winner);
+    print_winner_details(winner, game);
 }
 
 
@@ -349,7 +349,7 @@ Player* determine_winner(GameState* game) {
         Player* candidate = &game->players[i];
         if (candidate->is_bankrupt) continue;
 
-        int candidate_net_worth = calculate_net_worth(candidate);
+        int candidate_net_worth = calculate_net_worth(candidate, game);
         if (winner == NULL || candidate_net_worth > highest_net_worth ||
             (candidate_net_worth == highest_net_worth &&
              candidate->cash > winner->cash) ||
@@ -366,7 +366,7 @@ Player* determine_winner(GameState* game) {
 }
 
 // End-of-game output format from the assignment specification.
-void print_winner_details(const Player* winner) {
+void print_winner_details(const Player* winner, GameState* game) {
     printf("\n=============================================\n");
     printf("                 GAME OVER\n");
     printf("=============================================\n");
@@ -377,8 +377,8 @@ void print_winner_details(const Player* winner) {
     }
 
     int total_property_value =
-        calculate_total_property_value((Player*)winner);
-    int net_worth = calculate_net_worth((Player*)winner);
+        calculate_total_property_value((Player*)winner, game);
+    int net_worth = calculate_net_worth((Player*)winner, game);
 
     printf("Winner\n  %s\n", winner->player_name);
     printf("Total Cash\n  LKR %d\n", winner->cash);
@@ -497,7 +497,7 @@ void resolve_landing(GameState* game, Player* player) {
                        prop->property_name, prop->purchase_price);
 
                 if (should_buy_property(player, prop)) {
-                    buy_property(player, prop);
+                    buy_property(player, prop, game);
                 } else {
                     start_auction(game, prop);
                 }
@@ -511,6 +511,8 @@ void resolve_landing(GameState* game, Player* player) {
             } else {
                 Player* owner = &game->players[prop->owner_id];
                 int rent = calculate_rent_with_buildings(prop);
+                rent = apply_event_rent_modifiers(
+                    prop, game, owner->player_id, rent);
 
                 if (has_monopoly(owner, prop->color_group)) {
                     rent *= 2;
@@ -544,7 +546,7 @@ void resolve_landing(GameState* game, Player* player) {
                        prop->property_name, prop->purchase_price);
                 
                 if (should_buy_property(player, prop)) {
-                    buy_property(player, prop);
+                    buy_property(player, prop, game);
                 } else {
                     start_auction(game, prop);
                 }
@@ -605,7 +607,7 @@ void resolve_landing(GameState* game, Player* player) {
                        prop->property_name, prop->purchase_price);
                 
                 if (should_buy_property(player, prop)) {
-                    buy_property(player, prop);
+                    buy_property(player, prop, game);
                 } else {
                     start_auction(game, prop);
                 }
@@ -683,7 +685,7 @@ void resolve_landing(GameState* game, Player* player) {
                 if (should_take_loan(player)) {
                     int amount = get_loan_amount(player);
                     if (amount > max_loan) amount = max_loan;
-                    if (amount > 0) take_loan(player, amount);
+                    if (amount > 0) take_loan(player, amount, game);
                 }
             }
             break;
@@ -699,7 +701,7 @@ void resolve_landing(GameState* game, Player* player) {
                 if (should_buy_insurance(player, property_index)) {
                     int policy_type = get_insurance_type(player, property_index);
                     if (policy_type != INSURANCE_NONE) {
-                        buy_insurance(player, property_index, policy_type);
+                        buy_insurance(player, property_index, policy_type, game);
                     }
                 }
             }
@@ -899,11 +901,16 @@ void end_of_round_processing(GameState* game) {
 }
 
 // Helper function to buy property
-void buy_property(Player* player, Property* prop) {
+void buy_property(Player* player, Property* prop, GameState* game) {
     if (player == NULL || prop == NULL) return;
-    if (player->cash < prop->purchase_price) return;
-    
-    player->cash -= prop->purchase_price;
+
+    int purchase_price = get_property_value(prop);
+    purchase_price = apply_event_value_modifiers(
+        prop, game, player->player_id, purchase_price);
+
+    if (player->cash < purchase_price) return;
+
+    player->cash -= purchase_price;
     prop->owner_id = player->player_id;
     
     // Add to player's owned properties
@@ -911,7 +918,7 @@ void buy_property(Player* player, Property* prop) {
     player->owned_property_count++;
     
     printf("  %s purchased %s for LKR %d.\n", 
-           player->player_name, prop->property_name, prop->purchase_price);
+           player->player_name, prop->property_name, purchase_price);
 }
 
 // Run an auction according to Rules 6 and LK 19-23.
@@ -926,7 +933,10 @@ void start_auction(GameState* game, Property* prop) {
     int active[MAX_PLAYERS] = {0};
     int active_count = 0;
     int highest_bidder = -1;
-    int current_bid = get_property_value(prop) / 2;
+    int current_value = get_property_value(prop);
+    current_value = apply_event_value_modifiers(
+        prop, game, game->current_player_index, current_value);
+    int current_bid = current_value / 2;
 
     printf("\nAuction Started.\n");
     printf("Property :\n%s\n", prop->property_name);

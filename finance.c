@@ -171,7 +171,7 @@ int get_max_loan_amount(Player* player) {
 
 // Take a loan - player borrows money with properties as collateral
 // Returns: 1 = success, 0 = failure
-int take_loan(Player* player, int amount) {
+int take_loan(Player* player, int amount, GameState* game) {
     if (player == NULL) return 0;
     
     // Check if player already has an active loan
@@ -208,7 +208,13 @@ int take_loan(Player* player, int amount) {
     player->player_loan.is_active = 1;
     player->player_loan.current_amount = amount;
     player->player_loan.original_amount = amount;
-    player->player_loan.interest_rate = 8;  // Base interest rate (will be updated with inflation)
+    int interest_rate = 8;
+    if (game != NULL) {
+        interest_rate = game->current_interest_rate;
+        interest_rate = apply_event_interest_modifiers(
+            interest_rate, game, player->player_id);
+    }
+    player->player_loan.interest_rate = interest_rate;
     player->player_loan.rounds_remaining = LOAN_DURATION;
     player->player_loan.initial_duration = LOAN_DURATION;
     player->player_loan.collateral_count = locked_count;
@@ -444,7 +450,7 @@ int calculate_insurance_premium(Property* prop, int policy_type) {
 
 // Buy insurance for a property
 // Returns: 1 = success, 0 = failure
-int buy_insurance(Player* player, int property_index, int policy_type) {
+int buy_insurance(Player* player, int property_index, int policy_type, GameState* game) {
     if (player == NULL) return 0;
     if (property_index < 0 || property_index >= MAX_PROPERTIES) return 0;
     
@@ -471,6 +477,8 @@ int buy_insurance(Player* player, int property_index, int policy_type) {
     
     // Calculate premium
     int premium = calculate_insurance_premium(prop, policy_type);
+    premium = apply_event_insurance_modifiers(
+        premium, game, player->player_id);
     if (premium == 0) {
         printf("  Invalid insurance policy or property not eligible.\n");
         return 0;
@@ -681,11 +689,16 @@ void print_player_insurance(Player* player) {
 
 // Check if a player can build a house on a property
 // Returns: 1 = can build, 0 = cannot build
-int can_build_house(Player* player, int property_index) {
+int can_build_house(Player* player, int property_index, GameState* game) {
     if (player == NULL) return 0;
     if (property_index < 0 || property_index >= MAX_PROPERTIES) return 0;
     
     Property* prop = &property_array[property_index];
+
+    if (is_event_construction_suspended(game, player->player_id)) {
+        printf("  Construction is currently suspended by an event.\n");
+        return 0;
+    }
 
     // Railway stations and utilities cannot be developed.
     if (prop->color_group == GROUP_RAILWAY || prop->color_group == GROUP_UTILITY) {
@@ -718,7 +731,8 @@ int can_build_house(Player* player, int property_index) {
     }
     
     // Check if player has enough cash
-    int cost = prop->house_construction_cost;
+    int cost = apply_event_construction_modifiers(
+        prop->house_construction_cost, game, player->player_id);
     if (player->cash < cost) {
         printf("  Insufficient funds! House cost: LKR %d, Available: LKR %d\n", 
                cost, player->cash);
@@ -758,17 +772,18 @@ int can_build_house(Player* player, int property_index) {
 
 // Build a house on a property
 // Returns: 1 = success, 0 = failure
-int build_house(Player* player, int property_index) {
+int build_house(Player* player, int property_index, GameState* game) {
     if (player == NULL) return 0;
     if (property_index < 0 || property_index >= MAX_PROPERTIES) return 0;
     
     // Check if can build
-    if (!can_build_house(player, property_index)) {
+    if (!can_build_house(player, property_index, game)) {
         return 0;
     }
     
     Property* prop = &property_array[property_index];
-    int cost = prop->house_construction_cost;
+    int cost = apply_event_construction_modifiers(
+        prop->house_construction_cost, game, player->player_id);
     
     // Deduct cost
     player->cash -= cost;
@@ -788,11 +803,16 @@ int build_house(Player* player, int property_index) {
 
 // Check if a player can build a hotel on a property
 // Returns: 1 = can build, 0 = cannot build
-int can_build_hotel(Player* player, int property_index) {
+int can_build_hotel(Player* player, int property_index, GameState* game) {
     if (player == NULL) return 0;
     if (property_index < 0 || property_index >= MAX_PROPERTIES) return 0;
     
     Property* prop = &property_array[property_index];
+
+    if (is_event_construction_suspended(game, player->player_id)) {
+        printf("  Construction is currently suspended by an event.\n");
+        return 0;
+    }
 
     // Railway stations and utilities cannot be developed.
     if (prop->color_group == GROUP_RAILWAY || prop->color_group == GROUP_UTILITY) {
@@ -826,7 +846,8 @@ int can_build_hotel(Player* player, int property_index) {
     }
     
     // Check if player has enough cash
-    int cost = prop->hotel_construction_cost;
+    int cost = apply_event_construction_modifiers(
+        prop->hotel_construction_cost, game, player->player_id);
     if (player->cash < cost) {
         printf("  Insufficient funds! Hotel cost: LKR %d, Available: LKR %d\n", 
                cost, player->cash);
@@ -852,17 +873,18 @@ int can_build_hotel(Player* player, int property_index) {
 
 // Build a hotel on a property (upgrade from 4 houses)
 // Returns: 1 = success, 0 = failure
-int build_hotel(Player* player, int property_index) {
+int build_hotel(Player* player, int property_index, GameState* game) {
     if (player == NULL) return 0;
     if (property_index < 0 || property_index >= MAX_PROPERTIES) return 0;
     
     // Check if can build hotel
-    if (!can_build_hotel(player, property_index)) {
+    if (!can_build_hotel(player, property_index, game)) {
         return 0;
     }
     
     Property* prop = &property_array[property_index];
-    int cost = prop->hotel_construction_cost;
+    int cost = apply_event_construction_modifiers(
+        prop->hotel_construction_cost, game, player->player_id);
     
     // Deduct cost
     player->cash -= cost;
@@ -1038,7 +1060,8 @@ int get_building_cost(Property* prop, GameState* game) {
     
     // Apply event modifiers
     if (game != NULL) {
-        cost = apply_event_construction_modifiers(cost, game);
+        int player_id = prop->owner_id;
+        cost = apply_event_construction_modifiers(cost, game, player_id);
     }
     
     return cost;
@@ -1382,7 +1405,7 @@ int renovate_property(Player* player, int property_index) {
 }
 
 // Current value of all property, building, railway, and utility assets.
-int calculate_total_property_value(Player* player) {
+int calculate_total_property_value(Player* player, GameState* game) {
     if (player == NULL || player->is_bankrupt) return 0;
 
     int total_value = 0;
@@ -1391,7 +1414,10 @@ int calculate_total_property_value(Player* player) {
         Property* prop = &property_array[i];
         if (prop->owner_id != player->player_id) continue;
 
-        total_value += get_depreciated_value(prop);
+        int property_value = get_depreciated_value(prop);
+        property_value = apply_event_value_modifiers(
+            prop, game, player->player_id, property_value);
+        total_value += property_value;
 
         // A hotel replaces four houses, so their values are not both counted.
         if (prop->building_count == 5) {
@@ -1407,10 +1433,10 @@ int calculate_total_property_value(Player* player) {
 // Rule 15 net worth. Insurance claims and taxes have no pending balances in
 // the current model because both are settled immediately. Accrued interest is
 // already compounded into player_loan.current_amount.
-int calculate_net_worth(Player* player) {
+int calculate_net_worth(Player* player, GameState* game) {
     if (player == NULL || player->is_bankrupt) return 0;
 
-    int net_worth = player->cash + calculate_total_property_value(player);
+    int net_worth = player->cash + calculate_total_property_value(player, game);
 
     if (player->player_loan.is_active) {
         net_worth -= player->player_loan.current_amount;

@@ -726,79 +726,124 @@ void update_event_durations(GameState* game) {
 // APPLY EVENT EFFECTS
 // ============================================
 
+static ActiveEvent* get_player_event(GameState* game, int player_id) {
+    if (game == NULL) return NULL;
+    if (player_id < 0 || player_id >= MAX_PLAYERS) return NULL;
+    if (!game->player_events[player_id].is_active) return NULL;
+
+    return &game->player_events[player_id];
+}
+
 // Apply effects based on active event
-int apply_event_rent_modifiers(Property* prop, GameState* game, int current_rent) {
+int apply_event_rent_modifiers(Property* prop, GameState* game,
+                               int player_id, int current_rent) {
     if (game == NULL || prop == NULL) return current_rent;
-    
-    // Tourism Hype: hotels get double rent
-    if (game->national_event.is_active &&
-        strcmp(game->national_event.event_name, "Tourism Hype") == 0) {
-        if (prop->building_count == 5) {  // Hotel
-            current_rent *= 2;
-        }
-    }
-    
-    // Fuel Shortage: railway rent doubles
-    if (game->national_event.is_active &&
-        strcmp(game->national_event.event_name, "Fuel Shortage") == 0) {
-        if (prop->color_group == GROUP_RAILWAY) {
-            current_rent *= 2;
-        }
+
+    ActiveEvent* national = &game->national_event;
+    ActiveEvent* card = get_player_event(game, player_id);
+
+    if (national->is_active &&
+        strcmp(national->event_name, "Tourism Boom") == 0 &&
+        prop->building_count == 5) {
+        current_rent *= 2;
     }
 
-    // Power Failure: utility income is halved
-    if (game->national_event.is_active &&
-        strcmp(game->national_event.event_name, "Power Failure") == 0) {
-        if (prop->color_group == GROUP_UTILITY) {
-            current_rent = (current_rent * 50) / 100;
-        }
+    if (national->is_active &&
+        strcmp(national->event_name, "Fuel Crisis") == 0 &&
+        prop->color_group == GROUP_RAILWAY) {
+        current_rent *= 2;
     }
 
-    // Festival Season: hotels receive 50% additional rent
-    if (game->national_event.is_active &&
-        strcmp(game->national_event.event_name, "Festival Season") == 0) {
-        if (prop->building_count == 5) {
-            current_rent = (current_rent * 150) / 100;
-        }
+    if (national->is_active &&
+        strcmp(national->event_name, "Economic Recession") == 0) {
+        current_rent = (current_rent * 90) / 100;
+    }
+
+    if (national->is_active &&
+        strcmp(national->event_name, "Political Unrest") == 0 &&
+        prop->building_count == 5) {
+        current_rent = (current_rent * 50) / 100;
+    }
+
+    if (card != NULL && strcmp(card->event_name, "Tourism Hype") == 0 &&
+        prop->building_count == 5) {
+        current_rent *= 2;
+    }
+
+    if (card != NULL && strcmp(card->event_name, "Fuel Shortage") == 0 &&
+        prop->color_group == GROUP_RAILWAY) {
+        current_rent *= 2;
+    }
+
+    if (card != NULL && strcmp(card->event_name, "Power Failure") == 0 &&
+        prop->color_group == GROUP_UTILITY) {
+        current_rent = (current_rent * 50) / 100;
+    }
+
+    if (card != NULL && strcmp(card->event_name, "Festival Season") == 0 &&
+        prop->building_count == 5) {
+        current_rent = (current_rent * 150) / 100;
     }
     
     return current_rent;
 }
 
 // Apply event effects to property value
-int apply_event_value_modifiers(Property* prop, GameState* game, int current_value) {
+int apply_event_value_modifiers(Property* prop, GameState* game,
+                                int player_id, int current_value) {
     if (game == NULL || prop == NULL) return current_value;
-    
-    // Economic Downturn: all property values decrease by 15%
-    if (game->national_event.is_active &&
-        strcmp(game->national_event.event_name, "Economic Downturn") == 0) {
+
+    ActiveEvent* national = &game->national_event;
+    ActiveEvent* card = get_player_event(game, player_id);
+
+    if (national->is_active &&
+        strcmp(national->event_name, "Tourism Boom") == 0 &&
+        is_coastal_property(prop)) {
+        current_value = (current_value * 115) / 100;
+    }
+
+    if (national->is_active &&
+        strcmp(national->event_name, "Heavy Monsoon") == 0 &&
+        is_coastal_property(prop)) {
+        current_value = (current_value * 90) / 100;
+    }
+
+    if (national->is_active &&
+        strcmp(national->event_name, "Economic Recession") == 0) {
         current_value = (current_value * 85) / 100;
     }
-    
-    // Stock Market Rise: all property values increase by 10%
-    if (game->national_event.is_active &&
-        strcmp(game->national_event.event_name, "Stock Market Rise") == 0) {
+
+    if (national->is_active &&
+        strcmp(national->event_name, "Stock Market Boom") == 0) {
         current_value = (current_value * 110) / 100;
     }
 
-    // Foreign Funding: standard commercial properties increase by 15%
-    if (game->national_event.is_active &&
-        strcmp(game->national_event.event_name, "Foreign Funding") == 0 &&
+    if (national->is_active &&
+        strcmp(national->event_name, "Foreign Investment") == 0 &&
+        is_standard_property(prop)) {
+        current_value = (current_value * 120) / 100;
+    }
+
+    if (card != NULL && strcmp(card->event_name, "Economic Downturn") == 0) {
+        current_value = (current_value * 85) / 100;
+    }
+
+    if (card != NULL && strcmp(card->event_name, "Stock Market Rise") == 0) {
+        current_value = (current_value * 110) / 100;
+    }
+
+    if (card != NULL && strcmp(card->event_name, "Foreign Funding") == 0 &&
         is_standard_property(prop)) {
         current_value = (current_value * 115) / 100;
     }
 
-    // Port Expansion: railway station values increase by 20%
-    if (game->national_event.is_active &&
-        strcmp(game->national_event.event_name, "Port Expansion") == 0 &&
+    if (card != NULL && strcmp(card->event_name, "Port Expansion") == 0 &&
         prop->color_group == GROUP_RAILWAY) {
         current_value = (current_value * 120) / 100;
     }
 
-    // Property Revaluation: the selected property group appreciates by 15%
-    if (game->national_event.is_active &&
-        strcmp(game->national_event.event_name, "Property Revaluation") == 0 &&
-        prop->color_group == game->national_event.affected_group) {
+    if (card != NULL && strcmp(card->event_name, "Property Revaluation") == 0 &&
+        prop->color_group == card->affected_group) {
         current_value = (current_value * 115) / 100;
     }
     
@@ -806,18 +851,26 @@ int apply_event_value_modifiers(Property* prop, GameState* game, int current_val
 }
 
 // Apply event effects to construction costs
-int apply_event_construction_modifiers(int cost, GameState* game) {
+int apply_event_construction_modifiers(int cost, GameState* game, int player_id) {
     if (game == NULL) return cost;
-    
-    // Housing Subsidy: construction costs decrease by 30%
-    if (game->national_event.is_active &&
-        strcmp(game->national_event.event_name, "Housing Subsidy") == 0) {
+
+    ActiveEvent* national = &game->national_event;
+    ActiveEvent* card = get_player_event(game, player_id);
+
+    if (national->is_active && strcmp(national->event_name, "Fuel Crisis") == 0) {
+        cost = (cost * 120) / 100;
+    }
+
+    if (national->is_active &&
+        strcmp(national->event_name, "Government Housing Programme") == 0) {
+        cost = (cost * 75) / 100;
+    }
+
+    if (card != NULL && strcmp(card->event_name, "Housing Subsidy") == 0) {
         cost = (cost * 70) / 100;
     }
-    
-    // Currency Depreciation: construction costs increase by 10%
-    if (game->national_event.is_active &&
-        strcmp(game->national_event.event_name, "Currency Depreciation") == 0) {
+
+    if (card != NULL && strcmp(card->event_name, "Currency Depreciation") == 0) {
         cost = (cost * 110) / 100;
     }
     
@@ -825,15 +878,55 @@ int apply_event_construction_modifiers(int cost, GameState* game) {
 }
 
 // Apply event effects to insurance premiums
-int apply_event_insurance_modifiers(int premium, GameState* game) {
+int apply_event_insurance_modifiers(int premium, GameState* game, int player_id) {
     if (game == NULL) return premium;
-    
-    // Insurance Discount: premiums decrease by 20%
-    if (game->national_event.is_active &&
-        strcmp(game->national_event.event_name, "Insurance Discount") == 0) {
+
+    ActiveEvent* national = &game->national_event;
+    ActiveEvent* card = get_player_event(game, player_id);
+
+    // Rule-LK 18 gives no exact Heavy Monsoon percentage, so use 10%.
+    if (national->is_active && strcmp(national->event_name, "Heavy Monsoon") == 0) {
+        premium = (premium * 110) / 100;
+    }
+
+    if (card != NULL && strcmp(card->event_name, "Insurance Discount") == 0) {
         premium = (premium * 80) / 100;
     }
     
     return premium;
+}
+
+int apply_event_interest_modifiers(int rate, GameState* game, int player_id) {
+    if (game == NULL) return rate;
+
+    ActiveEvent* national = &game->national_event;
+    ActiveEvent* card = get_player_event(game, player_id);
+
+    if (national->is_active &&
+        strcmp(national->event_name, "Economic Recession") == 0) {
+        rate = (rate * 115) / 100;
+    }
+
+    if (national->is_active &&
+        strcmp(national->event_name, "Stock Market Boom") == 0) {
+        rate = (rate * 90) / 100;
+    }
+
+    if (card != NULL && strcmp(card->event_name, "Interest Rate Cut") == 0) {
+        rate -= 2;
+    }
+
+    if (card != NULL && strcmp(card->event_name, "Interest Rate Increase") == 0) {
+        rate += 2;
+    }
+
+    if (rate < 0) rate = 0;
+    return rate;
+}
+
+int is_event_construction_suspended(GameState* game, int player_id) {
+    ActiveEvent* card = get_player_event(game, player_id);
+
+    return card != NULL && strcmp(card->event_name, "Labour Strike") == 0;
 }
 

@@ -264,7 +264,7 @@ Player* get_player_by_id(GameState* game, int player_id);
 int get_round(const GameState* game);
 int check_game_over(GameState* game);
 Player* determine_winner(GameState* game);
-void print_winner_details(const Player* winner);
+void print_winner_details(const Player* winner, GameState* game);
 int determine_first_player(GameState* game);
 void process_turn(GameState* game, Player* player);
 void resolve_landing(GameState* game, Player* player);
@@ -290,7 +290,7 @@ void print_player_finance(Player* player);
 
 // loan system
 int get_max_loan_amount(Player* player);
-int take_loan(Player* player, int amount);
+int take_loan(Player* player, int amount, GameState* game);
 int repay_loan(Player* player, int amount);
 void apply_loan_interest(Player* player);
 void process_loan_default(Player* player);
@@ -300,7 +300,7 @@ void unlock_collateral(Player* player);
 
 //  Insurance System 
 int calculate_insurance_premium(Property* prop, int policy_type);
-int buy_insurance(Player* player, int property_index, int policy_type);
+int buy_insurance(Player* player, int property_index, int policy_type, GameState* game);
 void process_insurance_expiry(Property* prop);
 int process_disaster_claim(Property* prop, int damage_cost);
 int has_active_insurance(Property* prop);
@@ -310,10 +310,10 @@ void print_player_insurance(Player* player);
 
 
 // finance.c - Building System Prototypes
-int can_build_house(Player* player, int property_index);
-int build_house(Player* player, int property_index);
-int can_build_hotel(Player* player, int property_index);
-int build_hotel(Player* player, int property_index);
+int can_build_house(Player* player, int property_index, GameState* game);
+int build_house(Player* player, int property_index, GameState* game);
+int can_build_hotel(Player* player, int property_index, GameState* game);
+int build_hotel(Player* player, int property_index, GameState* game);
 int calculate_rent_with_buildings(Property* prop);
 int get_rent_multiplier(Property* prop);
 int get_building_multiplier(int building_count);
@@ -338,8 +338,8 @@ void update_property_age(Property* prop);
 int calculate_depreciation(Property* prop);
 int get_depreciated_value(Property* prop);
 int needs_renovation(Property* prop);
-int calculate_total_property_value(Player* player);
-int calculate_net_worth(Player* player);
+int calculate_total_property_value(Player* player, GameState* game);
+int calculate_net_worth(Player* player, GameState* game);
 void print_property_depreciation(Player* player);
 
 
@@ -351,7 +351,7 @@ void process_market_review(GameState* game);
 void process_national_event(GameState* game);
 void process_regional_development(GameState* game);
 void process_government_regulation(GameState* game);
-void buy_property(Player* player, Property* prop);
+void buy_property(Player* player, Property* prop, GameState* game);
 void start_auction(GameState* game, Property* prop);
 
 
@@ -433,10 +433,14 @@ void process_market_review(GameState* game);
 void check_disaster(GameState* game);
 void update_event_durations(GameState* game);
 // events.c - Event effect prototypes
-int apply_event_rent_modifiers(Property* prop, GameState* game, int current_rent);
-int apply_event_value_modifiers(Property* prop, GameState* game, int current_value);
-int apply_event_construction_modifiers(int cost, GameState* game);
-int apply_event_insurance_modifiers(int premium, GameState* game);
+int apply_event_rent_modifiers(Property* prop, GameState* game,
+                               int player_id, int current_rent);
+int apply_event_value_modifiers(Property* prop, GameState* game,
+                                int player_id, int current_value);
+int apply_event_construction_modifiers(int cost, GameState* game, int player_id);
+int apply_event_insurance_modifiers(int premium, GameState* game, int player_id);
+int apply_event_interest_modifiers(int rate, GameState* game, int player_id);
+int is_event_construction_suspended(GameState* game, int player_id);
 void remove_event_effects(GameState* game);
 
 #endif // TYPES_H
