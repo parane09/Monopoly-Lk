@@ -200,6 +200,7 @@ typedef struct {
     int is_active;
     char event_name[50];
     char region_name[50];      // Which region is affected
+    int card_index;            // Index of the active regional card
     int rounds_remaining;
     int effect_percentage;
 } RegionalDevelopment;
@@ -237,6 +238,7 @@ typedef struct {
     ActiveRegulation government_regulation;
     MarketCondition market_boom;
     MarketCondition market_decline;
+    int market_group_last_selected_round[8];
     
     // Current rates
     int current_inflation_rate;    // -3 to 12 (percesntage)
@@ -444,6 +446,8 @@ int apply_event_construction_modifiers(Property* prop, int cost,
 int apply_event_insurance_modifiers(int premium, GameState* game, int player_id);
 int apply_event_interest_modifiers(int rate, GameState* game, int player_id);
 int is_event_construction_suspended(GameState* game, int player_id);
+int can_purchase_under_regulation(Player* player, GameState* game);
+int apply_government_tax_modifier(int tax, GameState* game);
 int apply_market_purchase_modifier(Property* prop, GameState* game, int value);
 int apply_market_value_modifier(Property* prop, GameState* game, int value);
 int apply_market_mortgage_modifier(Property* prop, GameState* game, int value);

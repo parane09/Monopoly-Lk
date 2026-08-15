@@ -27,21 +27,6 @@ static const char* REGULATION_NAMES[] = {
 
 static const int NUM_REGULATIONS = 8;
 
-// Regional development regions (from Rule-LK 35)
-static const char* REGIONS[] = {
-    "Southern Province",
-    "Western Province",
-    "Central Province",
-    "Northern Province",
-    "Eastern Province",
-    "North Western Province",
-    "North Central Province",
-    "Uva Province",
-    "Sabaragamuwa Province"
-};
-
-static const int NUM_REGIONS = 9;
-
 // Disaster types (from Rule-LK 10)
 static const char* DISASTER_TYPES[] = {
     "Fire",
@@ -70,6 +55,29 @@ typedef struct {
 // National event deck (20 cards)
 static EventCard national_deck[20];
 static int deck_index = 0;
+
+typedef struct {
+    const char* name;
+    const char* description;
+    int effect_percentage;
+} RegionalCard;
+
+static const RegionalCard regional_deck[12] = {
+    {"Southern Tourism Boom", "Galle Fort, Unawatuna and Hikkaduwa rent +40%.", 40},
+    {"Port City Expansion", "Pettah, Maradana and Colombo Fort Station values +25%.", 25},
+    {"IT Industry Growth", "Maharagama, Nugegoda and Kottawa values +20%.", 20},
+    {"Northern Development Programme", "Jaffna Town, Nallur and Trincomalee values +30%.", 30},
+    {"Tea Export Boom", "Nuwara Eliya value +35%.", 35},
+    {"Airport Expansion", "Negombo, Katunayake and Ja-Ela rent +30%.", 30},
+    {"University City Growth", "Peradeniya and Kandy City values +20%.", 20},
+    {"Beach Pollution", "Southern coastal rent -30%.", -30},
+    {"Flood Damage", "Low-lying coastal property values -20%.", -20},
+    {"Transport Strike", "Railway revenue -40%.", -40},
+    {"Electricity Tariff Increase", "Utility rent +25%.", 25},
+    {"Water Shortage", "Water utility revenue +20%; surrounding values -10%.", 20}
+};
+
+static int regional_deck_index = 0;
 
 // ============================================
 // FORWARD DECLARATIONS
@@ -159,6 +167,7 @@ void init_event_deck() {
     national_deck[19] = (EventCard){"National Disaster", "A random developed property is damaged.", 0, 0, 1, "Developed Property"};
 
     deck_index = 0;
+    regional_deck_index = 0;
 }
 
 static void execute_event_card(GameState* game, EventCard* card,
@@ -367,10 +376,6 @@ void process_government_regulation(GameState* game) {
         }
         case 1: { // Reduce Loan Interest
             game->government_regulation.effect_percentage = -2;  // Interest -2%
-            game->current_interest_rate -= 2;
-            if (game->current_interest_rate < 0) {
-                game->current_interest_rate = 0;
-            }
             printf("  📜 %s\n", regulation_name);
             printf("     Loan interest decreases by 2%%.\n");
             break;
@@ -379,48 +384,50 @@ void process_government_regulation(GameState* game) {
             game->government_regulation.effect_percentage = -30;  // Construction -30%
             printf("  📜 %s\n", regulation_name);
             printf("     House construction costs reduce by 30%%.\n");
-            // Apply to all properties
-            for (int i = 0; i < MAX_PROPERTIES; i++) {
-                property_array[i].house_construction_cost = 
-                    (property_array[i].house_construction_cost * 70) / 100;
-            }
             break;
         }
         case 3: { // Luxury Property Tax
             game->government_regulation.effect_percentage = 25;  // Hotels tax 25%
             printf("  📜 %s\n", regulation_name);
             printf("     Hotels incur annual maintenance tax of 25%%.\n");
+
+            // No calendar year is defined, so levy the tax when selected.
+            for (int i = 0; i < MAX_PROPERTIES; i++) {
+                Property* prop = &property_array[i];
+                if (prop->owner_id == -1 || prop->building_count != 5) continue;
+
+                Player* owner = &game->players[prop->owner_id];
+                int developed_value = get_property_value(prop) +
+                                      prop->hotel_construction_cost;
+                int tax = (developed_value * 25) / 100;
+
+                if (owner->cash < tax) {
+                    declare_bankruptcy(owner,
+                        "unable to pay the Luxury Property Tax");
+                } else {
+                    owner->cash -= tax;
+                    printf("     %s paid LKR %d for %s.\n",
+                           owner->player_name, tax, prop->property_name);
+                }
+            }
             break;
         }
         case 4: { // Railway Modernization
             game->government_regulation.effect_percentage = 25;  // Railway rent +25%
             printf("  📜 %s\n", regulation_name);
             printf("     Railway rents increase 25%%.\n");
-            // Apply to all railway properties
-            for (int i = 0; i < MAX_PROPERTIES; i++) {
-                if (property_array[i].color_group == GROUP_RAILWAY) {
-                    property_array[i].base_rent = (property_array[i].base_rent * 125) / 100;
-                }
-            }
             break;
         }
         case 5: { // Electricity Tariff Revision
             game->government_regulation.effect_percentage = 20;  // Utility rent +20%
             printf("  📜 %s\n", regulation_name);
             printf("     Utility rents increase 20%%.\n");
-            // Apply to all utility properties
-            for (int i = 0; i < MAX_PROPERTIES; i++) {
-                if (property_array[i].color_group == GROUP_UTILITY) {
-                    property_array[i].base_rent = (property_array[i].base_rent * 120) / 100;
-                }
-            }
             break;
         }
         case 6: { // Insurance Regulation
             game->government_regulation.effect_percentage = -15;  // Insurance -15%
             printf("  📜 %s\n", regulation_name);
             printf("     Insurance premiums decrease 15%%.\n");
-            // Note: Insurance premium calculation will need to consider this
             break;
         }
         case 7: { // Anti-Speculation Act
@@ -443,22 +450,21 @@ void process_regional_development(GameState* game) {
     
     printf("\n🏗️ REGIONAL DEVELOPMENT TRIGGERED! (Every 15 Rounds)\n");
     
-    // Select random region
-    int index = rand() % NUM_REGIONS;
-    const char* region = REGIONS[index];
-    
-    // Random effect value between 20-30%
-    int effect = 20 + (rand() % 11);  // 20-30%
+    RegionalCard card = regional_deck[regional_deck_index];
+    int card_index = regional_deck_index;
+    const char* region = card.name;
+    regional_deck_index = (regional_deck_index + 1) % 12;
     
     // Store in game state
     game->regional_development.is_active = 1;
     game->regional_development.rounds_remaining = 15;
-    game->regional_development.effect_percentage = effect;
-    strcpy(game->regional_development.event_name, "Regional Development");
-    strcpy(game->regional_development.region_name, region);
+    game->regional_development.effect_percentage = card.effect_percentage;
+    game->regional_development.card_index = card_index;
+    strcpy(game->regional_development.event_name, card.name);
+    strcpy(game->regional_development.region_name, card.name);
     
     printf("  📍 %s Development Programme\n", region);
-    printf("     Property values in %s increase by %d%% for 15 rounds.\n", region, effect);
+    printf("  %s\n", card.description);
     printf("  ✅ Effect active for 15 rounds.\n");
 }
 
@@ -478,20 +484,38 @@ void process_market_review(GameState* game) {
     };
     int num_groups = 8;
     
-    // A group cannot receive the same condition in consecutive reviews.
-    int boom_index;
-    do {
-        boom_index = rand() % num_groups;
-    } while (groups[boom_index] == game->market_boom.group);
+    int eligible_indices[8];
+    int eligible_count = 0;
+
+    // Rule-LK 33: any previously affected group waits at least 30 rounds.
+    for (int i = 0; i < num_groups; i++) {
+        int rounds_since_selected =
+            game->round_number - game->market_group_last_selected_round[i];
+
+        if (rounds_since_selected >= 30) {
+            eligible_indices[eligible_count] = i;
+            eligible_count++;
+        }
+    }
+
+    if (eligible_count < 2) {
+        printf("  Market review skipped: fewer than two groups are eligible.\n");
+        return;
+    }
+
+    int boom_choice = rand() % eligible_count;
+    int boom_index = eligible_indices[boom_choice];
     PropertyGroup boom_group = groups[boom_index];
     
-    // Select random group for decline (different from boom)
-    int decline_index;
-    do {
-        decline_index = rand() % num_groups;
-    } while (decline_index == boom_index ||
-             groups[decline_index] == game->market_decline.group);
+    // Remove the boom group before selecting the decline group.
+    eligible_indices[boom_choice] = eligible_indices[eligible_count - 1];
+    eligible_count--;
+
+    int decline_index = eligible_indices[rand() % eligible_count];
     PropertyGroup decline_group = groups[decline_index];
+
+    game->market_group_last_selected_round[boom_index] = game->round_number;
+    game->market_group_last_selected_round[decline_index] = game->round_number;
     
     // Store boom in game state
     game->market_boom.is_active = 1;
@@ -660,6 +684,7 @@ void update_event_durations(GameState* game) {
                    game->regional_development.region_name);
             game->regional_development.is_active = 0;
             game->regional_development.effect_percentage = 0;
+            game->regional_development.card_index = -1;
             strcpy(game->regional_development.event_name, "None");
             strcpy(game->regional_development.region_name, "None");
         }
@@ -728,6 +753,96 @@ static ActiveEvent* get_player_event(GameState* game, int player_id) {
     return &game->player_events[player_id];
 }
 
+static int property_has_name(Property* prop, const char* name) {
+    return prop != NULL && strcmp(prop->property_name, name) == 0;
+}
+
+static int is_southern_tourism_property(Property* prop) {
+    return property_has_name(prop, "Galle Fort") ||
+           property_has_name(prop, "Unawatuna") ||
+           property_has_name(prop, "Hikkaduwa");
+}
+
+static int apply_regional_rent_modifier(Property* prop, GameState* game,
+                                         int rent) {
+    if (prop == NULL || game == NULL ||
+        !game->regional_development.is_active) return rent;
+
+    switch (game->regional_development.card_index) {
+        case 0: // Southern Tourism Boom
+            if (is_southern_tourism_property(prop)) rent = (rent * 140) / 100;
+            break;
+        case 5: // Airport Expansion
+            if (property_has_name(prop, "Negombo") ||
+                property_has_name(prop, "Katunayake") ||
+                property_has_name(prop, "Ja-Ela")) {
+                rent = (rent * 130) / 100;
+            }
+            break;
+        case 7: // Beach Pollution
+            if (is_southern_tourism_property(prop)) rent = (rent * 70) / 100;
+            break;
+        case 9: // Transport Strike
+            if (prop->color_group == GROUP_RAILWAY) rent = (rent * 60) / 100;
+            break;
+        case 10: // Electricity Tariff Increase
+            if (prop->color_group == GROUP_UTILITY) rent = (rent * 125) / 100;
+            break;
+        case 11: // Water Shortage
+            if (property_has_name(prop,
+                "National Water Supply and Drainage Board")) {
+                rent = (rent * 120) / 100;
+            }
+            break;
+        default:
+            break;
+    }
+
+    return rent;
+}
+
+static int apply_regional_value_modifier(Property* prop, GameState* game,
+                                          int value) {
+    if (prop == NULL || game == NULL ||
+        !game->regional_development.is_active) return value;
+
+    int card = game->regional_development.card_index;
+
+    if (card == 1 &&
+        (property_has_name(prop, "Pettah") ||
+         property_has_name(prop, "Maradana") ||
+         property_has_name(prop, "Colombo Fort Railway Station"))) {
+        value = (value * 125) / 100;
+    } else if (card == 2 &&
+        (property_has_name(prop, "Maharagama") ||
+         property_has_name(prop, "Nugegoda") ||
+         property_has_name(prop, "Kottawa"))) {
+        value = (value * 120) / 100;
+    } else if (card == 3 &&
+        (property_has_name(prop, "Jaffna Town") ||
+         property_has_name(prop, "Nallur") ||
+         property_has_name(prop, "Trincomalee"))) {
+        value = (value * 130) / 100;
+    } else if (card == 4 && property_has_name(prop, "Nuwara Eliya")) {
+        value = (value * 135) / 100;
+    } else if (card == 6 &&
+        (property_has_name(prop, "Peradeniya") ||
+         property_has_name(prop, "Kandy City"))) {
+        value = (value * 120) / 100;
+    } else if (card == 8 &&
+        (property_has_name(prop, "Negombo") ||
+         property_has_name(prop, "Katunayake") ||
+         property_has_name(prop, "Ja-Ela"))) {
+        value = (value * 80) / 100;
+    } else if (card == 11 &&
+        (property_has_name(prop, "Trincomalee") ||
+         property_has_name(prop, "Jaffna Railway Station"))) {
+        value = (value * 90) / 100;
+    }
+
+    return value;
+}
+
 // Apply effects based on active event
 int apply_event_rent_modifiers(Property* prop, GameState* game,
                                int player_id, int current_rent) {
@@ -779,6 +894,20 @@ int apply_event_rent_modifiers(Property* prop, GameState* game,
         current_rent = (current_rent * 150) / 100;
     }
 
+    if (game->government_regulation.is_active &&
+        strcmp(game->government_regulation.regulation_name,
+               "Railway Modernization") == 0 &&
+        prop->color_group == GROUP_RAILWAY) {
+        current_rent = (current_rent * 125) / 100;
+    }
+
+    if (game->government_regulation.is_active &&
+        strcmp(game->government_regulation.regulation_name,
+               "Electricity Tariff Revision") == 0 &&
+        prop->color_group == GROUP_UTILITY) {
+        current_rent = (current_rent * 120) / 100;
+    }
+
     if (game->market_boom.is_active &&
         prop->color_group == game->market_boom.group) {
         current_rent = (current_rent * 125) / 100;
@@ -789,7 +918,7 @@ int apply_event_rent_modifiers(Property* prop, GameState* game,
         current_rent = (current_rent * 80) / 100;
     }
     
-    return current_rent;
+    return apply_regional_rent_modifier(prop, game, current_rent);
 }
 
 // Apply event effects to property value
@@ -851,7 +980,7 @@ int apply_event_value_modifiers(Property* prop, GameState* game,
         current_value = (current_value * 115) / 100;
     }
     
-    return current_value;
+    return apply_regional_value_modifier(prop, game, current_value);
 }
 
 // Apply event effects to construction costs
@@ -879,6 +1008,13 @@ int apply_event_construction_modifiers(Property* prop, int cost,
         cost = (cost * 110) / 100;
     }
 
+    if (prop != NULL && prop->building_count < 4 &&
+        game->government_regulation.is_active &&
+        strcmp(game->government_regulation.regulation_name,
+               "Housing Subsidy") == 0) {
+        cost = (cost * 70) / 100;
+    }
+
     if (prop != NULL && game->market_boom.is_active &&
         prop->color_group == game->market_boom.group) {
         cost = (cost * 110) / 100;
@@ -901,6 +1037,12 @@ int apply_event_insurance_modifiers(int premium, GameState* game, int player_id)
 
     if (card != NULL && strcmp(card->event_name, "Insurance Discount") == 0) {
         premium = (premium * 80) / 100;
+    }
+
+    if (game->government_regulation.is_active &&
+        strcmp(game->government_regulation.regulation_name,
+               "Insurance Regulation") == 0) {
+        premium = (premium * 85) / 100;
     }
     
     return premium;
@@ -930,6 +1072,12 @@ int apply_event_interest_modifiers(int rate, GameState* game, int player_id) {
         rate += 2;
     }
 
+    if (game->government_regulation.is_active &&
+        strcmp(game->government_regulation.regulation_name,
+               "Reduce Loan Interest") == 0) {
+        rate -= 2;
+    }
+
     if (rate < 0) rate = 0;
     return rate;
 }
@@ -938,6 +1086,39 @@ int is_event_construction_suspended(GameState* game, int player_id) {
     ActiveEvent* card = get_player_event(game, player_id);
 
     return card != NULL && strcmp(card->event_name, "Labour Strike") == 0;
+}
+
+int can_purchase_under_regulation(Player* player, GameState* game) {
+    if (player == NULL || game == NULL) return 0;
+
+    if (!game->government_regulation.is_active ||
+        strcmp(game->government_regulation.regulation_name,
+               "Anti-Speculation Act") != 0) {
+        return 1;
+    }
+
+    int undeveloped_count = 0;
+    for (int i = 0; i < player->owned_property_count; i++) {
+        int property_index = player->owned_property_indices[i];
+        if (property_index < 0 || property_index >= MAX_PROPERTIES) continue;
+
+        Property* prop = &property_array[property_index];
+        if (is_standard_property(prop) && prop->building_count == 0) {
+            undeveloped_count++;
+        }
+    }
+
+    return undeveloped_count < 3;
+}
+
+int apply_government_tax_modifier(int tax, GameState* game) {
+    if (game != NULL && game->government_regulation.is_active &&
+        strcmp(game->government_regulation.regulation_name,
+               "Increase Property Tax") == 0) {
+        tax = (tax * 150) / 100;
+    }
+
+    return tax;
 }
 
 int apply_market_purchase_modifier(Property* prop, GameState* game, int value) {

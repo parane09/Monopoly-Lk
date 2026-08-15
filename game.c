@@ -49,6 +49,7 @@ void init_game(GameState* game) {
     game->regional_development.is_active = 0;
     game->regional_development.rounds_remaining = 0;
     game->regional_development.effect_percentage = 0;
+    game->regional_development.card_index = -1;
     strcpy(game->regional_development.event_name, "None");
     strcpy(game->regional_development.region_name, "None");
     
@@ -68,6 +69,11 @@ void init_game(GameState* game) {
     game->market_decline.effect_percentage = 0;
     game->market_decline.group = GROUP_NONE;
     strcpy(game->market_decline.group_name, "None");
+
+    // Standard colour groups have not been selected before the game starts.
+    for (int i = 0; i < 8; i++) {
+        game->market_group_last_selected_round[i] = -30;
+    }
     
     // Initialize all 4 players
     const char* player_names[] = {
@@ -498,7 +504,10 @@ void resolve_landing(GameState* game, Player* player) {
                 printf("  %s is available for LKR %d.\n",
                        prop->property_name, prop->purchase_price);
 
-                if (should_buy_property(player, prop)) {
+                if (!can_purchase_under_regulation(player, game)) {
+                    printf("  Purchase blocked by the Anti-Speculation Act.\n");
+                    start_auction(game, prop);
+                } else if (should_buy_property(player, prop)) {
                     buy_property(player, prop, game);
                 } else {
                     start_auction(game, prop);
@@ -547,7 +556,10 @@ void resolve_landing(GameState* game, Player* player) {
                 printf("  %s is available for LKR %d.\n", 
                        prop->property_name, prop->purchase_price);
                 
-                if (should_buy_property(player, prop)) {
+                if (!can_purchase_under_regulation(player, game)) {
+                    printf("  Purchase blocked by the Anti-Speculation Act.\n");
+                    start_auction(game, prop);
+                } else if (should_buy_property(player, prop)) {
                     buy_property(player, prop, game);
                 } else {
                     start_auction(game, prop);
@@ -577,6 +589,8 @@ void resolve_landing(GameState* game, Player* player) {
                     case 4: rent = 2000; break;
                     default: rent = 250; break;
                 }
+                rent = apply_event_rent_modifiers(
+                    prop, game, owner->player_id, rent);
                 
                 // Pay rent
                 if (player->cash < rent) {
@@ -608,7 +622,10 @@ void resolve_landing(GameState* game, Player* player) {
                 printf("  %s is available for LKR %d.\n", 
                        prop->property_name, prop->purchase_price);
                 
-                if (should_buy_property(player, prop)) {
+                if (!can_purchase_under_regulation(player, game)) {
+                    printf("  Purchase blocked by the Anti-Speculation Act.\n");
+                    start_auction(game, prop);
+                } else if (should_buy_property(player, prop)) {
                     buy_property(player, prop, game);
                 } else {
                     start_auction(game, prop);
@@ -638,6 +655,8 @@ void resolve_landing(GameState* game, Player* player) {
                 } else if (utility_count == 2) {
                     rent = 10 * dice_total;
                 }
+                rent = apply_event_rent_modifiers(
+                    prop, game, owner->player_id, rent);
                 
                 // Pay rent
                 if (player->cash < rent) {
@@ -714,10 +733,11 @@ void resolve_landing(GameState* game, Player* player) {
         // ============================================
         case SQUARE_TAX:
             printf("  Paying income tax...\n");
-            // Income tax: LKR 2000
-            if (player->cash >= 2000) {
-                player->cash -= 2000;
-                printf("  %s paid LKR 2,000 income tax.\n", player->player_name);
+            int income_tax = apply_government_tax_modifier(2000, game);
+            if (player->cash >= income_tax) {
+                player->cash -= income_tax;
+                printf("  %s paid LKR %d income tax.\n",
+                       player->player_name, income_tax);
             } else {
                 declare_bankruptcy(player, "unable to pay income tax");
             }
@@ -949,7 +969,8 @@ void start_auction(GameState* game, Property* prop) {
 
     // Rule-LK 19: every solvent player enters the auction.
     for (int i = 0; i < MAX_PLAYERS; i++) {
-        if (!game->players[i].is_bankrupt) {
+        if (!game->players[i].is_bankrupt &&
+            can_purchase_under_regulation(&game->players[i], game)) {
             active[i] = 1;
             active_count++;
         }
