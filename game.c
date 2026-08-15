@@ -38,6 +38,7 @@ void init_game(GameState* game) {
     game->national_event.rounds_remaining = 0;
     game->national_event.effect_percentage = 0;
     game->national_event.affected_group = GROUP_NONE;
+    game->national_event.started_round = -1;
     strcpy(game->national_event.event_name, "None");
 
     for (int i = 0; i < MAX_PLAYERS; i++) {
@@ -45,6 +46,7 @@ void init_game(GameState* game) {
         game->player_events[i].rounds_remaining = 0;
         game->player_events[i].effect_percentage = 0;
         game->player_events[i].affected_group = GROUP_NONE;
+        game->player_events[i].started_round = -1;
         strcpy(game->player_events[i].event_name, "None");
     }
     
@@ -52,24 +54,28 @@ void init_game(GameState* game) {
     game->regional_development.rounds_remaining = 0;
     game->regional_development.effect_percentage = 0;
     game->regional_development.card_index = -1;
+    game->regional_development.started_round = -1;
     strcpy(game->regional_development.event_name, "None");
     strcpy(game->regional_development.region_name, "None");
     
     game->government_regulation.is_active = 0;
     game->government_regulation.rounds_remaining = 0;
     game->government_regulation.effect_percentage = 0;
+    game->government_regulation.started_round = -1;
     strcpy(game->government_regulation.regulation_name, "None");
     
     game->market_boom.is_active = 0;
     game->market_boom.rounds_remaining = 0;
     game->market_boom.effect_percentage = 0;
     game->market_boom.group = GROUP_NONE;
+    game->market_boom.started_round = -1;
     strcpy(game->market_boom.group_name, "None");
     
     game->market_decline.is_active = 0;
     game->market_decline.rounds_remaining = 0;
     game->market_decline.effect_percentage = 0;
     game->market_decline.group = GROUP_NONE;
+    game->market_decline.started_round = -1;
     strcpy(game->market_decline.group_name, "None");
 
     // Standard colour groups have not been selected before the game starts.
@@ -116,6 +122,7 @@ void init_game(GameState* game) {
         game->players[i].player_loan.original_amount = 0;
         game->players[i].player_loan.interest_rate = 0;
         game->players[i].player_loan.rounds_remaining = 0;
+        game->players[i].player_loan.started_round = -1;
         game->players[i].player_loan.initial_duration = LOAN_DURATION;
         game->players[i].player_loan.collateral_count = 0;
         for (int j = 0; j < MAX_COLLATERAL; j++) {
@@ -795,7 +802,7 @@ void end_of_round_processing(GameState* game) {
     for (int i = 0; i < MAX_PLAYERS; i++) {
         Player* player = &game->players[i];
         if (!player->is_bankrupt && player->player_loan.is_active) {
-            apply_loan_interest(player);
+            apply_loan_interest(player, game->round_number);
         }
     }
     
@@ -806,7 +813,7 @@ void end_of_round_processing(GameState* game) {
     for (int i = 0; i < MAX_PROPERTIES; i++) {
         Property* prop = &property_array[i];
         if (prop->owner_id != -1 && prop->insurance_policy != INSURANCE_NONE) {
-            process_insurance_expiry(prop);
+            process_insurance_expiry(prop, game->round_number);
         }
     }
 

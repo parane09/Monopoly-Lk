@@ -136,6 +136,7 @@ void declare_bankruptcy(Player* player, const char* reason) {
         prop->building_count = 0;
         prop->insurance_policy = INSURANCE_NONE;
         prop->insurance_rounds_remaining = 0;
+        prop->insurance_started_round = -1;
         prop->has_disaster_damage = 0;
         prop->pending_repair_cost = 0;
     }
@@ -239,6 +240,8 @@ int take_loan(Player* player, int amount, GameState* game) {
     player->player_loan.interest_rate = interest_rate;
     player->player_loan.rounds_remaining = LOAN_DURATION;
     player->player_loan.initial_duration = LOAN_DURATION;
+    player->player_loan.started_round =
+        (game != NULL) ? game->round_number + 1 : -1;
     player->player_loan.collateral_count = locked_count;
     
     // Add cash to player
@@ -301,9 +304,10 @@ int repay_loan(Player* player, int amount) {
 
 // Apply compound interest to a player's loan
 // Called at the end of each round
-void apply_loan_interest(Player* player) {
+void apply_loan_interest(Player* player, int current_round) {
     if (player == NULL) return;
     if (!player->player_loan.is_active) return;
+    if (player->player_loan.started_round == current_round) return;
     
     // Compound interest: amount = amount * (100 + rate) / 100
     int interest = (player->player_loan.current_amount * player->player_loan.interest_rate) / 100;
@@ -519,6 +523,8 @@ int buy_insurance(Player* player, int property_index, int policy_type, GameState
     // Set insurance on property
     prop->insurance_policy = policy_type;
     prop->insurance_rounds_remaining = INSURANCE_DURATION;
+    prop->insurance_started_round =
+        (game != NULL) ? game->round_number + 1 : -1;
     
     // Print policy name
     const char* policy_names[] = {
@@ -539,9 +545,10 @@ int buy_insurance(Player* player, int property_index, int policy_type, GameState
 }
 
 // Process insurance expiry - called at end of each round
-void process_insurance_expiry(Property* prop) {
+void process_insurance_expiry(Property* prop, int current_round) {
     if (prop == NULL) return;
     if (prop->insurance_policy == INSURANCE_NONE) return;
+    if (prop->insurance_started_round == current_round) return;
     
     // Decrement remaining rounds
     prop->insurance_rounds_remaining--;
@@ -572,6 +579,7 @@ void process_insurance_expiry(Property* prop) {
                policy_names[prop->insurance_policy]);
         prop->insurance_policy = INSURANCE_NONE;
         prop->insurance_rounds_remaining = 0;
+        prop->insurance_started_round = -1;
     }
 }
 

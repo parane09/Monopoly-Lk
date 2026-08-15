@@ -905,6 +905,8 @@ void init_board_data() {
     // Initialize temporary fields shared by event and disaster systems.
     for (int i = 0; i < prop_index; i++) {
         property_array[i].event_closed_rounds = 0;
+        property_array[i].event_closed_started_round = -1;
+        property_array[i].insurance_started_round = -1;
         property_array[i].has_disaster_damage = 0;
         property_array[i].pending_repair_cost = 0;
     }

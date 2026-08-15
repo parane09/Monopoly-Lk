@@ -112,6 +112,7 @@ typedef struct {
     // Insurance
     int insurance_policy;      // 0 = none, 1-3 = policy type
     int insurance_rounds_remaining;
+    int insurance_started_round;
     
     // Depreciation and condition
     int property_age;          // Rounds since purchase/renovation
@@ -122,6 +123,7 @@ typedef struct {
     int pending_repair_cost;   // Amount required for automatic repair
     int value_reduction;       // Percentage reduction (0-30)
     int event_closed_rounds;   // Temporary closure caused by an event card
+    int event_closed_started_round;
     
     // Group
     PropertyGroup color_group;
@@ -147,6 +149,7 @@ typedef struct {
     int interest_rate;         // Percentage (e.g., 8 for 8%)
     int rounds_remaining;
     int initial_duration;      // Always 20
+    int started_round;
     
     int collateral_properties[MAX_COLLATERAL];  // Property indices
     int collateral_count;
@@ -195,6 +198,7 @@ typedef struct {
     int rounds_remaining;
     int effect_percentage;
     PropertyGroup affected_group; // Used by Property Revaluation
+    int started_round;
 } ActiveEvent;
 
 // Regional development tracking structure (NEW)
@@ -205,6 +209,7 @@ typedef struct {
     int card_index;            // Index of the active regional card
     int rounds_remaining;
     int effect_percentage;
+    int started_round;
 } RegionalDevelopment;
 
 // Active regulation tracking
@@ -213,6 +218,7 @@ typedef struct {
     char regulation_name[50];
     int rounds_remaining;
     int effect_percentage;
+    int started_round;
 } ActiveRegulation;
 
 // Market boom/decline tracking
@@ -222,6 +228,7 @@ typedef struct {
     PropertyGroup group;
     int rounds_remaining;
     int effect_percentage;
+    int started_round;
 } MarketCondition;
 
 // Game state structure - overall game data
@@ -300,7 +307,7 @@ int get_max_loan_amount(Player* player);
 int get_max_loan_amount_with_market(Player* player, GameState* game);
 int take_loan(Player* player, int amount, GameState* game);
 int repay_loan(Player* player, int amount);
-void apply_loan_interest(Player* player);
+void apply_loan_interest(Player* player, int current_round);
 void process_loan_default(Player* player);
 void declare_bankruptcy(Player* player, const char* reason);
 void lock_collateral(Player* player, int loan_amount);
@@ -309,7 +316,7 @@ void unlock_collateral(Player* player);
 //  Insurance System 
 int calculate_insurance_premium(Property* prop, int policy_type);
 int buy_insurance(Player* player, int property_index, int policy_type, GameState* game);
-void process_insurance_expiry(Property* prop);
+void process_insurance_expiry(Property* prop, int current_round);
 int process_disaster_claim(Property* prop, int damage_cost,
                            const char* disaster_type, GameState* game);
 int has_active_insurance(Property* prop);

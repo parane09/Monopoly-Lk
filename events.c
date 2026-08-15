@@ -183,6 +183,8 @@ static void execute_event_card(GameState* game, EventCard* card,
             printf("  No owned property was available to close.\n");
         } else {
             property_array[property_index].event_closed_rounds = 2;
+            property_array[property_index].event_closed_started_round =
+                game->round_number + 1;
             printf("  %s is closed for 2 rounds.\n",
                    property_array[property_index].property_name);
         }
@@ -258,6 +260,7 @@ void draw_event_card(GameState* game) {
     player_event->rounds_remaining = card.duration_rounds;
     player_event->effect_percentage = card.effect_percentage;
     player_event->affected_group = GROUP_NONE;
+    player_event->started_round = game->round_number + 1;
     strcpy(player_event->event_name, card.name);
 
     printf("  Card belongs to: %s\n", game->players[player_index].player_name);
@@ -265,6 +268,7 @@ void draw_event_card(GameState* game) {
 
     if (card.duration_rounds == 0) {
         player_event->is_active = 0;
+        player_event->started_round = -1;
     }
     
     if (card.duration_rounds > 0) {
@@ -303,6 +307,7 @@ void process_national_event(GameState* game) {
     game->national_event.rounds_remaining = 15;
     game->national_event.effect_percentage = card.effect_percentage;
     game->national_event.affected_group = GROUP_NONE;
+    game->national_event.started_round = game->round_number;
     strcpy(game->national_event.event_name, card.name);
     
     printf("  ✅ Effect active for 15 rounds.\n");
@@ -371,6 +376,7 @@ void process_government_regulation(GameState* game) {
     // Store in game state
     game->government_regulation.is_active = 1;
     game->government_regulation.rounds_remaining = 20;
+    game->government_regulation.started_round = game->round_number;
     strcpy(game->government_regulation.regulation_name, regulation_name);
     
     // Apply regulation effects based on type
@@ -465,6 +471,7 @@ void process_regional_development(GameState* game) {
     // Store in game state
     game->regional_development.is_active = 1;
     game->regional_development.rounds_remaining = 15;
+    game->regional_development.started_round = game->round_number;
     game->regional_development.effect_percentage = card.effect_percentage;
     game->regional_development.card_index = card_index;
     strcpy(game->regional_development.event_name, card.name);
@@ -527,6 +534,7 @@ void process_market_review(GameState* game) {
     // Store boom in game state
     game->market_boom.is_active = 1;
     game->market_boom.rounds_remaining = 10;
+    game->market_boom.started_round = game->round_number;
     game->market_boom.effect_percentage = 20;  // +20% for boom
     game->market_boom.group = boom_group;
     strcpy(game->market_boom.group_name, group_names[boom_index]);
@@ -534,6 +542,7 @@ void process_market_review(GameState* game) {
     // Store decline in game state
     game->market_decline.is_active = 1;
     game->market_decline.rounds_remaining = 10;
+    game->market_decline.started_round = game->round_number;
     game->market_decline.effect_percentage = -15;  // -15% for decline
     game->market_decline.group = decline_group;
     strcpy(game->market_decline.group_name, group_names[decline_index]);
@@ -631,10 +640,12 @@ void update_event_durations(GameState* game) {
 
     // Reduce temporary property closures created by Political Rally.
     for (int i = 0; i < MAX_PROPERTIES; i++) {
-        if (property_array[i].event_closed_rounds > 0) {
+        if (property_array[i].event_closed_rounds > 0 &&
+            property_array[i].event_closed_started_round != game->round_number) {
             property_array[i].event_closed_rounds--;
 
             if (property_array[i].event_closed_rounds == 0) {
+                property_array[i].event_closed_started_round = -1;
                 printf("  %s has reopened after the Political Rally.\n",
                        property_array[i].property_name);
             }
@@ -645,7 +656,8 @@ void update_event_durations(GameState* game) {
     for (int i = 0; i < MAX_PLAYERS; i++) {
         ActiveEvent* player_event = &game->player_events[i];
 
-        if (!player_event->is_active) continue;
+        if (!player_event->is_active ||
+            player_event->started_round == game->round_number) continue;
 
         player_event->rounds_remaining--;
 
@@ -660,6 +672,7 @@ void update_event_durations(GameState* game) {
             player_event->is_active = 0;
             player_event->effect_percentage = 0;
             player_event->affected_group = GROUP_NONE;
+            player_event->started_round = -1;
             strcpy(player_event->event_name, "None");
         }
     }
@@ -667,7 +680,8 @@ void update_event_durations(GameState* game) {
     // ============================================
     // 1. NATIONAL EVENT
     // ============================================
-    if (game->national_event.is_active) {
+    if (game->national_event.is_active &&
+        game->national_event.started_round != game->round_number) {
         game->national_event.rounds_remaining--;
         
         // Check for renewal reminder (3 rounds before expiry)
@@ -682,6 +696,7 @@ void update_event_durations(GameState* game) {
                    game->national_event.event_name);
             game->national_event.is_active = 0;
             game->national_event.effect_percentage = 0;
+            game->national_event.started_round = -1;
             strcpy(game->national_event.event_name, "None");
         }
     }
@@ -689,7 +704,8 @@ void update_event_durations(GameState* game) {
     // ============================================
     // 2. REGIONAL DEVELOPMENT
     // ============================================
-    if (game->regional_development.is_active) {
+    if (game->regional_development.is_active &&
+        game->regional_development.started_round != game->round_number) {
         game->regional_development.rounds_remaining--;
         
         if (game->regional_development.rounds_remaining == 3) {
@@ -703,6 +719,7 @@ void update_event_durations(GameState* game) {
             game->regional_development.is_active = 0;
             game->regional_development.effect_percentage = 0;
             game->regional_development.card_index = -1;
+            game->regional_development.started_round = -1;
             strcpy(game->regional_development.event_name, "None");
             strcpy(game->regional_development.region_name, "None");
         }
@@ -711,7 +728,8 @@ void update_event_durations(GameState* game) {
     // ============================================
     // 3. GOVERNMENT REGULATION
     // ============================================
-    if (game->government_regulation.is_active) {
+    if (game->government_regulation.is_active &&
+        game->government_regulation.started_round != game->round_number) {
         game->government_regulation.rounds_remaining--;
         
         if (game->government_regulation.rounds_remaining == 3) {
@@ -724,6 +742,7 @@ void update_event_durations(GameState* game) {
                    game->government_regulation.regulation_name);
             game->government_regulation.is_active = 0;
             game->government_regulation.effect_percentage = 0;
+            game->government_regulation.started_round = -1;
             strcpy(game->government_regulation.regulation_name, "None");
         }
     }
@@ -731,7 +750,8 @@ void update_event_durations(GameState* game) {
     // ============================================
     // 4. MARKET BOOM
     // ============================================
-    if (game->market_boom.is_active) {
+    if (game->market_boom.is_active &&
+        game->market_boom.started_round != game->round_number) {
         game->market_boom.rounds_remaining--;
         
         if (game->market_boom.rounds_remaining == 0) {
@@ -739,6 +759,7 @@ void update_event_durations(GameState* game) {
                    game->market_boom.group_name);
             game->market_boom.is_active = 0;
             game->market_boom.effect_percentage = 0;
+            game->market_boom.started_round = -1;
             strcpy(game->market_boom.group_name, "None");
         }
     }
@@ -746,7 +767,8 @@ void update_event_durations(GameState* game) {
     // ============================================
     // 5. MARKET DECLINE
     // ============================================
-    if (game->market_decline.is_active) {
+    if (game->market_decline.is_active &&
+        game->market_decline.started_round != game->round_number) {
         game->market_decline.rounds_remaining--;
         
         if (game->market_decline.rounds_remaining == 0) {
@@ -754,6 +776,7 @@ void update_event_durations(GameState* game) {
                    game->market_decline.group_name);
             game->market_decline.is_active = 0;
             game->market_decline.effect_percentage = 0;
+            game->market_decline.started_round = -1;
             strcpy(game->market_decline.group_name, "None");
         }
     }
