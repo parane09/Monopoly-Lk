@@ -274,8 +274,7 @@ Property* get_property_at_position(int position);
 int is_property_square(int position);
 SquareType get_square_type(int position);
 int count_properties_in_group(Player* player, PropertyGroup group);
-int property_has_classification(const Property* prop,
-                                PropertyClassification classification);
+
 
 // Prototypes from finance.c
 int get_property_value(Property* prop);

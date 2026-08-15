@@ -908,7 +908,6 @@ void init_board_data() {
                MAX_PROPERTIES, prop_index);
     }
 
-    initialize_property_classifications();
     
     
 }
