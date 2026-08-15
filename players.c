@@ -9,59 +9,10 @@
 
 // Helper functions
 static int calculate_roi(Player* player, Property* prop);
-static int can_afford_rent(Player* player);
-static int get_property_priority(Property* prop);
-static int get_group_development_status(Player* player, PropertyGroup group);
 
 // ============================================
 // INTERNAL HELPER FUNCTIONS
 // ============================================
-
-// Check if player can afford average rent payment
-static int can_afford_rent(Player* player) {
-    if (player == NULL) return 0;
-    return (player->cash >= 500);  // Average rent ~LKR 500
-}
-
-// Get property priority (higher = more desirable)
-static int get_property_priority(Property* prop) {
-    if (prop == NULL) return 0;
-    
-    int priority = 0;
-    
-    // Premium properties get highest priority
-    if (strcmp(prop->property_name, "Galle Face") == 0) priority = 10;
-    else if (strcmp(prop->property_name, "Nuwara Eliya") == 0) priority = 9;
-    else if (prop->color_group == GROUP_DARK_BLUE) priority = 8;
-    else if (prop->color_group == GROUP_GREEN) priority = 7;
-    else if (prop->color_group == GROUP_YELLOW) priority = 6;
-    else if (prop->color_group == GROUP_RED) priority = 5;
-    else if (prop->color_group == GROUP_ORANGE) priority = 4;
-    else if (prop->color_group == GROUP_PINK) priority = 3;
-    else if (prop->color_group == GROUP_LIGHT_BLUE) priority = 2;
-    else if (prop->color_group == GROUP_BROWN) priority = 1;
-    
-    return priority;
-}
-
-// Get development status of a group (how many houses built)
-static int get_group_development_status(Player* player, PropertyGroup group) {
-    if (player == NULL) return 0;
-    
-    int total_buildings = 0;
-    int property_count = 0;
-    
-    for (int i = 0; i < MAX_PROPERTIES; i++) {
-        if (property_array[i].color_group == group &&
-            property_array[i].owner_id == player->player_id) {
-            total_buildings += property_array[i].building_count;
-            property_count++;
-        }
-    }
-    
-    if (property_count == 0) return 0;
-    return total_buildings / property_count;  // Average buildings per property
-}
 
 // ============================================
 // STRATEGY DISPATCHER
