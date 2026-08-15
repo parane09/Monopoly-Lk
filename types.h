@@ -449,6 +449,7 @@ void process_regional_development(GameState* game);
 void process_market_review(GameState* game);
 void check_disaster(GameState* game);
 void update_event_durations(GameState* game);
+void print_current_market_conditions(GameState* game);
 // events.c - Event effect prototypes
 int apply_event_rent_modifiers(Property* prop, GameState* game,
                                int player_id, int current_rent);

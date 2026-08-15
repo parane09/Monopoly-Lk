@@ -931,6 +931,7 @@ void end_of_round_processing(GameState* game) {
     }
     
     update_event_durations(game);
+    print_current_market_conditions(game);
     printf("\n=== END OF ROUND %d PROCESSING COMPLETE ===\n", game->round_number);
 }
 

@@ -782,6 +782,56 @@ void update_event_durations(GameState* game) {
     }
 }
 
+void print_current_market_conditions(GameState* game) {
+    if (game == NULL) return;
+
+    printf("\n=========================================\n");
+    printf("Current Market Conditions\n");
+    printf("=========================================\n");
+
+    printf("Market Boom\n");
+    printf("-------------\n");
+    if (game->market_boom.is_active) {
+        printf("%s Group (+20%%)\n", game->market_boom.group_name);
+        printf("Rounds Remaining : %d\n",
+               game->market_boom.rounds_remaining);
+    } else {
+        printf("None\n");
+    }
+
+    printf("Market Decline\n");
+    printf("----------------\n");
+    if (game->market_decline.is_active) {
+        printf("%s Group (-15%%)\n", game->market_decline.group_name);
+        printf("Rounds Remaining : %d\n",
+               game->market_decline.rounds_remaining);
+    } else {
+        printf("None\n");
+    }
+
+    printf("Regional Development\n");
+    printf("-----------------------\n");
+    if (game->regional_development.is_active) {
+        printf("%s\n", game->regional_development.event_name);
+        printf("(%+d%%)\n", game->regional_development.effect_percentage);
+        printf("Rounds Remaining : %d\n",
+               game->regional_development.rounds_remaining);
+    } else {
+        printf("None\n");
+    }
+
+    printf("Inflation\n");
+    printf("------------\n");
+    printf("%+d%%\n", game->current_inflation_rate);
+
+    printf("Current Loan Interest\n");
+    printf("-----------------------\n");
+    int general_interest = apply_event_interest_modifiers(
+        game->current_interest_rate, game, -1);
+    printf("%d%%\n", general_interest);
+    printf("=========================================\n");
+}
+
 // ============================================
 // APPLY EVENT EFFECTS
 // ============================================
