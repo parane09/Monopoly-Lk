@@ -352,8 +352,8 @@ int aggressive_auction_bid(Player* player, Property* prop, int current_bid) {
     // Calculate maximum bid: 120% of property purchase price
     int max_bid = (prop->purchase_price * 120) / 100;
     
-    // Calculate next bid (round up to nearest multiple of 250)
-    int next_bid = ((current_bid + 250) / 250) * 250;
+    // Rule-LK 20: increase the current bid by the minimum LKR 250.
+    int next_bid = current_bid + 250;
     
     // Check if next bid exceeds maximum allowed or player's cash
     if (next_bid <= max_bid && next_bid <= player->cash) {
@@ -765,8 +765,8 @@ int conservative_auction_bid(Player* player, Property* prop, int current_bid) {
         return -1;  // Would leave less than 50% cash
     }
     
-    // Calculate next bid (round up to nearest multiple of 250)
-    int next_bid = ((current_bid + 250) / 250) * 250;
+    // Rule-LK 20: increase the current bid by the minimum LKR 250.
+    int next_bid = current_bid + 250;
     
     // Check if next bid is within limits
     if (next_bid <= max_bid && next_bid <= player->cash) {
@@ -1095,8 +1095,8 @@ int risk_taker_auction_bid(Player* player, Property* prop, int current_bid) {
     // Can't bid if we can't afford current bid
     if (current_bid >= player->cash) return -1;
     
-    // Calculate next bid (round up to nearest 250)
-    int next_bid = ((current_bid + 250) / 250) * 250;
+    // Rule-LK 20: increase the current bid by the minimum LKR 250.
+    int next_bid = current_bid + 250;
     
     // Bid until cash is exhausted - no maximum limit
     if (next_bid <= player->cash) {
@@ -1392,8 +1392,8 @@ int opportunistic_auction_bid(Player* player, Property* prop, int current_bid) {
         }
     }
     
-    // Calculate next bid
-    int next_bid = ((current_bid + 250) / 250) * 250;
+    // Rule-LK 20: increase the current bid by the minimum LKR 250.
+    int next_bid = current_bid + 250;
     
     if (next_bid <= max_bid && next_bid <= player->cash) {
         return next_bid;

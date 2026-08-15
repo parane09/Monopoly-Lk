@@ -167,7 +167,7 @@ void run_game(GameState* game) {
     game->round_number = get_round(game);
     printf("\n========== Round %d ==========\n", game->round_number);
 
-    while (game->round_number <= 2 && !game->is_game_over) {
+    while (game->round_number <= 50 && !game->is_game_over) {
         for (int i = 0; i < MAX_PLAYERS; i++) {
             int player_idx = (game->starting_player_index + i) % MAX_PLAYERS;
             Player* player = &game->players[player_idx];
@@ -178,14 +178,53 @@ void run_game(GameState* game) {
             }
 
             if (player->is_in_jail) {
-                player->jail_turns_served++;
-                printf("  %s is in jail - skipping turn %d\n",
-                       player->player_name, player->jail_turns_served);
+                printf("\n  %s's jail turn:\n", player->player_name);
 
-                if (player->jail_turns_served >= 3) {
-                    player->is_in_jail = 0;
-                    player->jail_turns_served = 0;
-                    printf("  %s has been released from jail\n", player->player_name);
+                int paid_fine = 0;
+                if (player->strategy == STRATEGY_AGGRESSIVE ||
+                    player->strategy == STRATEGY_RISK_TAKER) {
+                    if (player->cash >= 300) {
+                        player->cash -= 300;
+                        player->total_expenses_paid += 300;
+                        player->is_in_jail = 0;
+                        player->jail_turns_served = 0;
+                        paid_fine = 1;
+                        printf("  %s immediately paid the LKR 300 jail fine.\n",
+                               player->player_name);
+                    } else {
+                        printf("  %s cannot afford the LKR 300 jail fine and must roll for doubles.\n",
+                               player->player_name);
+                    }
+                }
+
+                // Paying the fine releases the player, but movement resumes
+                // only on their next turn. A released player does not roll now.
+                if (!paid_fine) {
+                    DiceRoll jail_roll = roll_dice();
+                    player->last_dice_total = jail_roll.total;
+                    printf("    Rolled: %d + %d = %d%s\n",
+                           jail_roll.first_die,
+                           jail_roll.second_die,
+                           jail_roll.total,
+                           jail_roll.is_double ? " (doubles)" : "");
+
+                    if (jail_roll.is_double) {
+                        player->is_in_jail = 0;
+                        player->jail_turns_served = 0;
+                        printf("  %s rolled doubles and was released from jail. Movement resumes next turn.\n",
+                               player->player_name);
+                    } else {
+                        player->jail_turns_served++;
+                        printf("  %s remains in jail after turn %d.\n",
+                               player->player_name, player->jail_turns_served);
+
+                        if (player->jail_turns_served >= 3) {
+                            player->is_in_jail = 0;
+                            player->jail_turns_served = 0;
+                            printf("  %s has served three turns and was released from jail. Movement resumes next turn.\n",
+                                   player->player_name);
+                        }
+                    }
                 }
             } else {
                 process_turn(game, player);
@@ -241,7 +280,7 @@ Player* get_player_by_id(GameState* game, int player_id) {
     }
     return NULL;
 }
-
+ 
 // A game round is one more than the fewest GO passes among solvent players.
 // Jailed players remain included because they have not passed GO while jailed.
 int get_round(const GameState* game) {
@@ -319,8 +358,8 @@ Player* determine_winner(GameState* game) {
 // End-of-game output format from the assignment specification.
 void print_winner_details(const Player* winner) {
     printf("\n=============================================\n");
-    printf("GAME OVER\n");
-
+    printf("                 GAME OVER\n");
+    printf("\n=============================================\n");
     if (winner == NULL) {
         printf("Winner\nNone - all players are bankrupt\n");
         printf("=============================================\n");
@@ -864,11 +903,93 @@ void buy_property(Player* player, Property* prop) {
            player->player_name, prop->property_name, prop->purchase_price);
 }
 
-// Helper function to start auction
+// Run an auction according to Rules 6 and LK 19-23.
 void start_auction(GameState* game, Property* prop) {
-    printf("  Auction started for %s...\n", prop->property_name);
-    // TODO: Implement full auction system
-    // For now, just print
+    if (game == NULL || prop == NULL) return;
+    if (prop->owner_id != -1) {
+        printf("  Auction cancelled: %s is already owned.\n",
+               prop->property_name);
+        return;
+    }
+
+    int active[MAX_PLAYERS] = {0};
+    int active_count = 0;
+    int highest_bidder = -1;
+    int current_bid = get_property_value(prop) / 2;
+
+    printf("\nAuction Started.\n");
+    printf("Property :\n%s\n", prop->property_name);
+    printf("Opening Bid :\nLKR %d.\n", current_bid);
+
+    // Rule-LK 19: every solvent player enters the auction.
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        if (!game->players[i].is_bankrupt) {
+            active[i] = 1;
+            active_count++;
+        }
+    }
+
+    while (active_count > 0) {
+        int bids_this_pass = 0;
+
+        for (int turn = 0; turn < MAX_PLAYERS; turn++) {
+            int player_index =
+                (game->starting_player_index + turn) % MAX_PLAYERS;
+            Player* bidder = &game->players[player_index];
+
+            if (!active[player_index] || player_index == highest_bidder) {
+                continue;
+            }
+
+            int proposed_bid = get_auction_bid(bidder, prop, current_bid);
+
+            // The controller enforces the rules even if a strategy returns an
+            // invalid amount: minimum increment, available cash, no loans.
+            if (proposed_bid >= current_bid + 250 &&
+                proposed_bid <= bidder->cash) {
+                current_bid = proposed_bid;
+                highest_bidder = player_index;
+                bids_this_pass++;
+                printf("%s bids LKR %d.\n",
+                       bidder->player_name, current_bid);
+            } else {
+                active[player_index] = 0;
+                active_count--;
+                printf("%s withdraws.\n", bidder->player_name);
+            }
+        }
+
+        // Once every challenger has withdrawn, the current high bidder wins.
+        if (highest_bidder != -1 && active_count == 1) {
+            break;
+        }
+
+        // No bid in a complete pass means no remaining player can advance it.
+        if (bids_this_pass == 0) {
+            break;
+        }
+    }
+
+    if (highest_bidder == -1) {
+        printf("No player bids. %s remains with the Bank.\n",
+               prop->property_name);
+        return;
+    }
+
+    Player* winner = &game->players[highest_bidder];
+    int property_index = (int)(prop - property_array);
+
+    winner->cash -= current_bid;
+    prop->owner_id = winner->player_id;
+    if (winner->owned_property_count < MAX_PROPERTIES) {
+        winner->owned_property_indices[winner->owned_property_count] =
+            property_index;
+        winner->owned_property_count++;
+    }
+    winner->auction_wins++;
+
+    printf("%s wins the auction for LKR %d.\n",
+           winner->player_name, current_bid);
 }
 
 
