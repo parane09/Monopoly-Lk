@@ -743,6 +743,8 @@ int conservative_should_buy(Player* player, Property* prop) {
     if (cash_after < cash_before / 2) {
         return 0;  // Too expensive - would leave less than 50% cash
     }
+
+    return 1;
 }
 
 int conservative_auction_bid(Player* player, Property* prop, int current_bid) {
@@ -1133,6 +1135,7 @@ int risk_taker_loan_amount(Player* player) {
 }
 
 int risk_taker_should_repay(Player* player) {
+    (void)player;
     // Risk Taker: Never repays loans
     // (Refinancing is handled separately when visiting Bank)
     return 0;

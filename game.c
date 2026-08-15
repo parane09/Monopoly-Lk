@@ -19,6 +19,7 @@
 void init_game(GameState* game) {
     // initialize the board with all the data
     init_board_data();
+    init_event_deck();
     // Initialize round number
     game->round_number = 1;
     game->current_player_index = 0;
@@ -648,7 +649,7 @@ void resolve_landing(GameState* game, Player* player) {
         // ============================================
         case SQUARE_EVENT:
             printf("  Drawing an event card...\n");
-            // TODO: Draw event card
+            draw_event_card(game);
             break;
             
         // ============================================
@@ -884,6 +885,7 @@ void end_of_round_processing(GameState* game) {
         }
     }
     
+    update_event_durations(game);
     printf("\n=== END OF ROUND %d PROCESSING COMPLETE ===\n", game->round_number);
 }
 
@@ -992,39 +994,3 @@ void start_auction(GameState* game, Property* prop) {
            winner->player_name, current_bid);
 }
 
-
-
-
-// ============================================
-// EVENT FUNCTIONS (Placeholders - Will be in events.c)
-// ============================================
-
-void process_inflation(GameState* game) {
-    // TODO: Generate inflation rate and apply to values
-    printf("    Inflation processing... (placeholder)\n");
-}
-
-void check_disaster(GameState* game) {
-    // TODO: Random disaster on developed property
-    printf("    Disaster check... (placeholder)\n");
-}
-
-void process_market_review(GameState* game) {
-    // TODO: Market boom/decline for property groups
-    printf("    Market review... (placeholder)\n");
-}
-
-void process_national_event(GameState* game) {
-    // TODO: Draw national event card
-    printf("    National event... (placeholder)\n");
-}
-
-void process_regional_development(GameState* game) {
-    // TODO: Regional development card
-    printf("    Regional development... (placeholder)\n");
-}
-
-void process_government_regulation(GameState* game) {
-    // TODO: Government regulation
-    printf("    Government regulation... (placeholder)\n");
-}

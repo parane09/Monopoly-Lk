@@ -23,7 +23,7 @@ int get_property_value(Property* prop) {
     if (prop->has_structural_damage) {
         value = (value * 85) / 100;
     }
-    
+
     return value;
 }
 
@@ -93,19 +93,6 @@ int get_min_buildings_in_group(Player* player, PropertyGroup group) {
     }
     
     return selected_property;
-}
-
-// Get building cost based on property
-int get_building_cost(Property* prop) {
-    if (prop == NULL) return 0;
-    
-    // If has 4 houses, this is a hotel upgrade
-    if (prop->building_count == 4) {
-        return prop->hotel_construction_cost;
-    }
-    
-    // Otherwise building a house
-    return prop->house_construction_cost;
 }
 
 // Print function to display player's financial status
@@ -1037,6 +1024,24 @@ void print_player_buildings(Player* player) {
         printf("  No buildings.\n");
     }
     printf("====================\n");
+}
+
+int get_building_cost(Property* prop, GameState* game) {
+    if (prop == NULL) return 0;
+    
+    int cost;
+    if (prop->building_count == 4) {
+        cost = prop->hotel_construction_cost;
+    } else {
+        cost = prop->house_construction_cost;
+    }
+    
+    // Apply event modifiers
+    if (game != NULL) {
+        cost = apply_event_construction_modifiers(cost, game);
+    }
+    
+    return cost;
 }
 
 // ============================================

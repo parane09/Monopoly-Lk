@@ -236,6 +236,7 @@ typedef struct {
     // Current rates
     int current_inflation_rate;    // -3 to 12 (percesntage)
     int current_interest_rate;     // Base loan interest rate
+    int market_effects_applied;
     
 } GameState;
 
@@ -281,7 +282,6 @@ int get_property_value(Property* prop);
 int get_total_mortgage_value(Player* player);
 int has_monopoly(Player* player, PropertyGroup group);
 int get_min_buildings_in_group(Player* player, PropertyGroup group);
-int get_building_cost(Property* prop);
 void print_player_finance(Player* player);
 
 // loan system
@@ -315,6 +315,7 @@ int get_rent_multiplier(Property* prop);
 int get_building_multiplier(int building_count);
 void print_building_status(Property* prop);
 void print_player_buildings(Player* player);
+int get_building_cost(Property* prop, GameState* game);
 
 
 // finance.c - Building Condition Prototypes
@@ -415,6 +416,24 @@ int opportunistic_should_hotel(Player* player);
 int opportunistic_choose_hotel(Player* player);
 int opportunistic_should_insure(Player* player, int property_index);
 int opportunistic_should_renovate(Player* player, int property_index);
+
+
+// events.c prototypes
+void init_event_deck();
+void draw_event_card(GameState* game);
+void process_national_event(GameState* game);
+void process_inflation(GameState* game);
+void process_government_regulation(GameState* game);
+void process_regional_development(GameState* game);
+void process_market_review(GameState* game);
+void check_disaster(GameState* game);
+void update_event_durations(GameState* game);
+// events.c - Event effect prototypes
+int apply_event_rent_modifiers(Property* prop, GameState* game, int current_rent);
+int apply_event_value_modifiers(Property* prop, GameState* game, int current_value);
+int apply_event_construction_modifiers(int cost, GameState* game);
+int apply_event_insurance_modifiers(int premium, GameState* game);
+void remove_event_effects(GameState* game);
 
 #endif // TYPES_H
 
