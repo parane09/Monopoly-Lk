@@ -230,7 +230,8 @@ typedef struct {
     Player players[MAX_PLAYERS];
     
     // Active economy events
-    ActiveEvent national_event;
+    ActiveEvent national_event;                 // Periodic event affecting everyone
+    ActiveEvent player_events[MAX_PLAYERS];     // Event cards affecting one player
     RegionalDevelopment regional_development;
     ActiveRegulation government_regulation;
     MarketCondition market_boom;

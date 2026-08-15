@@ -76,7 +76,8 @@ static int deck_index = 0;
 // ============================================
 
 void init_event_deck();
-static void execute_event_card(GameState* game, EventCard* card);
+static void execute_event_card(GameState* game, EventCard* card,
+                               ActiveEvent* active_event);
 
 static int is_standard_property(Property* prop) {
     return prop->color_group >= GROUP_BROWN &&
@@ -160,7 +161,8 @@ void init_event_deck() {
     deck_index = 0;
 }
 
-static void execute_event_card(GameState* game, EventCard* card) {
+static void execute_event_card(GameState* game, EventCard* card,
+                               ActiveEvent* active_event) {
     if (strcmp(card->name, "Heavy Floods") == 0) {
         int property_index = choose_random_property(0, 1);
         damage_property_from_card(property_index);
@@ -177,15 +179,10 @@ static void execute_event_card(GameState* game, EventCard* card) {
         }
     }
     else if (strcmp(card->name, "Interest Rate Cut") == 0) {
-        game->current_interest_rate -= 2;
-        if (game->current_interest_rate < 0) {
-            game->current_interest_rate = 0;
-        }
-        printf("  Loan interest is now %d%%.\n", game->current_interest_rate);
+        printf("  This player's borrowing rate is reduced by 2%%.\n");
     }
     else if (strcmp(card->name, "Interest Rate Increase") == 0) {
-        game->current_interest_rate += 2;
-        printf("  Loan interest is now %d%%.\n", game->current_interest_rate);
+        printf("  This player's borrowing rate is increased by 2%%.\n");
     }
     else if (strcmp(card->name, "Tax Amnesty") == 0) {
         for (int i = 0; i < MAX_PLAYERS; i++) {
@@ -201,7 +198,7 @@ static void execute_event_card(GameState* game, EventCard* card) {
             GROUP_RED, GROUP_YELLOW, GROUP_GREEN, GROUP_DARK_BLUE
         };
 
-        game->national_event.affected_group = groups[rand() % 8];
+        active_event->affected_group = groups[rand() % 8];
         printf("  One random property group will receive 15%% appreciation.\n");
     }
     else if (strcmp(card->name, "Government Grant") == 0) {
@@ -233,6 +230,9 @@ static void execute_event_card(GameState* game, EventCard* card) {
 
 void draw_event_card(GameState* game) {
     if (game == NULL) return;
+
+    int player_index = game->current_player_index;
+    ActiveEvent* player_event = &game->player_events[player_index];
     
     // Draw the current card
     EventCard card = national_deck[deck_index];
@@ -244,17 +244,18 @@ void draw_event_card(GameState* game) {
     printf("  🃏 EVENT CARD: %s\n", card.name);
     printf("     %s\n", card.description);
     
-    // Apply the card effect to game state
-    game->national_event.is_active = 1;
-    game->national_event.rounds_remaining = card.duration_rounds;
-    game->national_event.effect_percentage = card.effect_percentage;
-    game->national_event.affected_group = GROUP_NONE;
-    strcpy(game->national_event.event_name, card.name);
+    // Store this card only for the player who drew it.
+    player_event->is_active = 1;
+    player_event->rounds_remaining = card.duration_rounds;
+    player_event->effect_percentage = card.effect_percentage;
+    player_event->affected_group = GROUP_NONE;
+    strcpy(player_event->event_name, card.name);
 
-    execute_event_card(game, &card);
+    printf("  Card belongs to: %s\n", game->players[player_index].player_name);
+    execute_event_card(game, &card, player_event);
 
     if (card.duration_rounds == 0) {
-        game->national_event.is_active = 0;
+        player_event->is_active = 0;
     }
     
     if (card.duration_rounds > 0) {
@@ -266,12 +267,23 @@ void draw_event_card(GameState* game) {
 
 void process_national_event(GameState* game) {
     if (game == NULL) return;
+
+    static const EventCard economic_events[] = {
+        {"Tourism Boom", "Hotels earn double rent and southern coastal values rise by 15%.", 15, 15, 0, "All"},
+        {"Fuel Crisis", "Railway rent doubles and development costs rise by 20%.", 20, 15, 0, "All"},
+        {"Heavy Monsoon", "Insurance premiums rise and coastal values fall by 10%.", -10, 15, 0, "All"},
+        {"Economic Recession", "Values fall 15%, rent falls 10%, and loan interest rises 15%.", -15, 15, 0, "All"},
+        {"Stock Market Boom", "Property values rise 10% and loan interest falls 10%.", 10, 15, 0, "All"},
+        {"Government Housing Programme", "House construction costs fall by 25%.", -25, 15, 0, "All"},
+        {"Foreign Investment", "Commercial property values rise by 20%.", 20, 15, 0, "All"},
+        {"Political Unrest", "Hotel rent falls by 50% and riot risk increases.", -50, 15, 0, "All"}
+    };
+    int event_count = (int)(sizeof(economic_events) / sizeof(economic_events[0]));
     
     printf("\n🏛️ NATIONAL EVENT TRIGGERED! (Every 15 Rounds)\n");
     
-    // Draw a card from the deck
-    EventCard card = national_deck[deck_index];
-    deck_index = (deck_index + 1) % 20;
+    // Select from the separate periodic economic-event list.
+    EventCard card = economic_events[rand() % event_count];
     
     // Print the event
     printf("  📜 %s\n", card.name);
@@ -281,6 +293,7 @@ void process_national_event(GameState* game) {
     game->national_event.is_active = 1;
     game->national_event.rounds_remaining = 15;
     game->national_event.effect_percentage = card.effect_percentage;
+    game->national_event.affected_group = GROUP_NONE;
     strcpy(game->national_event.event_name, card.name);
     
     printf("  ✅ Effect active for 15 rounds.\n");
@@ -589,6 +602,29 @@ void update_event_durations(GameState* game) {
                 printf("  %s has reopened after the Political Rally.\n",
                        property_array[i].property_name);
             }
+        }
+    }
+
+    // Each player keeps and expires their own Event-square card effect.
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        ActiveEvent* player_event = &game->player_events[i];
+
+        if (!player_event->is_active) continue;
+
+        player_event->rounds_remaining--;
+
+        if (player_event->rounds_remaining == 3) {
+            printf("  %s: Event card '%s' expires in 3 rounds.\n",
+                   game->players[i].player_name, player_event->event_name);
+        }
+
+        if (player_event->rounds_remaining <= 0) {
+            printf("  %s: Event card '%s' has ended.\n",
+                   game->players[i].player_name, player_event->event_name);
+            player_event->is_active = 0;
+            player_event->effect_percentage = 0;
+            player_event->affected_group = GROUP_NONE;
+            strcpy(player_event->event_name, "None");
         }
     }
     

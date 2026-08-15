@@ -35,7 +35,16 @@ void init_game(GameState* game) {
     game->national_event.is_active = 0;
     game->national_event.rounds_remaining = 0;
     game->national_event.effect_percentage = 0;
+    game->national_event.affected_group = GROUP_NONE;
     strcpy(game->national_event.event_name, "None");
+
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        game->player_events[i].is_active = 0;
+        game->player_events[i].rounds_remaining = 0;
+        game->player_events[i].effect_percentage = 0;
+        game->player_events[i].affected_group = GROUP_NONE;
+        strcpy(game->player_events[i].event_name, "None");
+    }
     
     game->regional_development.is_active = 0;
     game->regional_development.rounds_remaining = 0;
