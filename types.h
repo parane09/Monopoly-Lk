@@ -56,7 +56,8 @@ typedef enum {
     GROUP_GREEN,
     GROUP_DARK_BLUE,
     GROUP_RAILWAY,
-    GROUP_UTILITY
+    GROUP_UTILITY,
+    GROUP_NONE
 } PropertyGroup;
 
 
@@ -118,6 +119,7 @@ typedef struct {
     int rounds_since_maintenance;
     int has_structural_damage; // 0 = no, 1 = yes
     int value_reduction;       // Percentage reduction (0-30)
+    int event_closed_rounds;   // Temporary closure caused by an event card
     
     // Group
     PropertyGroup color_group;
@@ -190,6 +192,7 @@ typedef struct {
     char event_name[50];
     int rounds_remaining;
     int effect_percentage;
+    PropertyGroup affected_group; // Used by Property Revaluation
 } ActiveEvent;
 
 // Regional development tracking structure (NEW)

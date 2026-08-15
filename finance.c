@@ -1191,6 +1191,7 @@ void process_structural_damage(Property* prop) {
 // Check if a building is closed (condition < 25%)
 int is_building_closed(Property* prop) {
     if (prop == NULL) return 1;  // NULL considered closed
+    if (prop->event_closed_rounds > 0) return 1; // Closed by Political Rally
     if (prop->building_count == 0) return 0;  // No building = not closed
     
     return (prop->condition_percentage < 25);

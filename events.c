@@ -53,31 +53,6 @@ static const char* DISASTER_TYPES[] = {
 
 static const int NUM_DISASTERS = 5;
 
-static const char* EVENT_NAMES[] = {
-    "Tourism Boom",
-    "Fuel Crisis",
-    "Heavy Monsoon",
-    "Economic Recession",
-    "Stock Market Boom",
-    "Government Housing Programme",
-    "Foreign Investment",
-    "Political Interest",
-    "Agricultural Boom",
-    "Export Growth",
-    "Infrastructure Development",
-    "Currency Devaluation",
-    "Trade Agreement",
-    "Banking Crisis",
-    "Real Estate Bubble",
-    "Tech Industry Growth",
-    "Education Reform",
-    "Healthcare Investment",
-    "Transportation Upgrade",
-    "Energy Crisis"
-};
-
-
-
 // ============================================
 // EVENT CARD DECK
 // ============================================
@@ -87,6 +62,7 @@ typedef struct {
     char name[50];
     char description[100];
     int effect_percentage;
+    int duration_rounds; // 0 means the card takes effect immediately
     int target_type;  // 0 = all players, 1 = properties, 2 = regions
     char target_region[50];
 } EventCard;
@@ -100,154 +76,159 @@ static int deck_index = 0;
 // ============================================
 
 void init_event_deck();
+static void execute_event_card(GameState* game, EventCard* card);
+
+static int is_standard_property(Property* prop) {
+    return prop->color_group >= GROUP_BROWN &&
+           prop->color_group <= GROUP_DARK_BLUE;
+}
+
+static int is_coastal_property(Property* prop) {
+    const char* name = prop->property_name;
+
+    return strstr(name, "Mount Lavinia") != NULL ||
+           strstr(name, "Negombo") != NULL ||
+           strstr(name, "Galle") != NULL ||
+           strstr(name, "Unawatuna") != NULL ||
+           strstr(name, "Hikkaduwa") != NULL ||
+           strstr(name, "Trincomalee") != NULL;
+}
+
+static int choose_random_property(int developed_only, int coastal_only) {
+    int choices[MAX_PROPERTIES];
+    int choice_count = 0;
+
+    for (int i = 0; i < MAX_PROPERTIES; i++) {
+        Property* prop = &property_array[i];
+
+        if (prop->owner_id == -1) continue;
+        if (developed_only && prop->building_count == 0) continue;
+        if (coastal_only && !is_coastal_property(prop)) continue;
+
+        choices[choice_count] = i;
+        choice_count++;
+    }
+
+    if (choice_count == 0) return -1;
+    return choices[rand() % choice_count];
+}
+
+static void damage_property_from_card(int property_index) {
+    if (property_index == -1) {
+        printf("  No suitable owned property was available.\n");
+        return;
+    }
+
+    Property* prop = &property_array[property_index];
+    prop->has_structural_damage = 1;
+    prop->condition_percentage -= 20;
+
+    if (prop->condition_percentage < 0) {
+        prop->condition_percentage = 0;
+    }
+
+    printf("  %s was damaged. Its condition is now %d%%.\n",
+           prop->property_name, prop->condition_percentage);
+}
 
 // ============================================
 // FUNCTIONS
 // ============================================
 
 void init_event_deck() {
-    // Card 0: Tourism Boom
-    strcpy(national_deck[0].name, "Tourism Boom");
-    strcpy(national_deck[0].description, "Hotels receive double rent. Southern coastal properties increase by 15%%.");
-    national_deck[0].effect_percentage = 15;
-    national_deck[0].target_type = 1;  // Properties
-    strcpy(national_deck[0].target_region, "Southern");
-    
-    // Card 1: Fuel Crisis
-    strcpy(national_deck[1].name, "Fuel Crisis");
-    strcpy(national_deck[1].description, "Railway rent doubles. Property development costs increase 20%%.");
-    national_deck[1].effect_percentage = 20;
-    national_deck[1].target_type = 1;  // Properties
-    strcpy(national_deck[1].target_region, "All");
-    
-    // Card 2: Heavy Monsoon
-    strcpy(national_deck[2].name, "Heavy Monsoon");
-    strcpy(national_deck[2].description, "Flood risk increases. Insurance premiums increase. Coastal properties lose 10%% value.");
-    national_deck[2].effect_percentage = 10;
-    national_deck[2].target_type = 1;  // Properties
-    strcpy(national_deck[2].target_region, "Coastal");
-    
-    // Card 3: Economic Recession
-    strcpy(national_deck[3].name, "Economic Recession");
-    strcpy(national_deck[3].description, "Property values decrease 15%%. Rent decreases 10%%. Loan interest increases by 15%%.");
-    national_deck[3].effect_percentage = -15;
-    national_deck[3].target_type = 0;  // All players
-    strcpy(national_deck[3].target_region, "All");
-    
-    // Card 4: Stock Market Boom
-    strcpy(national_deck[4].name, "Stock Market Boom");
-    strcpy(national_deck[4].description, "Property values increase 10%%. Loan interest decreases by 10%%.");
-    national_deck[4].effect_percentage = 10;
-    national_deck[4].target_type = 0;  // All players
-    strcpy(national_deck[4].target_region, "All");
-    
-    // Card 5: Government Housing Programme
-    strcpy(national_deck[5].name, "Government Housing Programme");
-    strcpy(national_deck[5].description, "House construction costs reduce 25%%.");
-    national_deck[5].effect_percentage = -25;
-    national_deck[5].target_type = 1;  // Properties
-    strcpy(national_deck[5].target_region, "All");
-    
-    // Card 6: Foreign Investment
-    strcpy(national_deck[6].name, "Foreign Investment");
-    strcpy(national_deck[6].description, "Commercial properties increase 20%%.");
-    national_deck[6].effect_percentage = 20;
-    national_deck[6].target_type = 1;  // Properties
-    strcpy(national_deck[6].target_region, "Commercial");
-    
-    // Card 7: Political Interest
-    strcpy(national_deck[7].name, "Political Interest");
-    strcpy(national_deck[7].description, "Riot probability doubles. Hotel rent drops by 50%%.");
-    national_deck[7].effect_percentage = -50;
-    national_deck[7].target_type = 1;  // Properties
-    strcpy(national_deck[7].target_region, "Hotels");
-    
-    // Card 8: Agricultural Boom
-    strcpy(national_deck[8].name, "Agricultural Boom");
-    strcpy(national_deck[8].description, "Rural property values increase 15%%.");
-    national_deck[8].effect_percentage = 15;
-    national_deck[8].target_type = 1;  // Properties
-    strcpy(national_deck[8].target_region, "Rural");
-    
-    // Card 9: Export Growth
-    strcpy(national_deck[9].name, "Export Growth");
-    strcpy(national_deck[9].description, "Industrial properties increase 20%%.");
-    national_deck[9].effect_percentage = 20;
-    national_deck[9].target_type = 1;  // Properties
-    strcpy(national_deck[9].target_region, "Industrial");
-    
-    // Card 10: Infrastructure Development
-    strcpy(national_deck[10].name, "Infrastructure Development");
-    strcpy(national_deck[10].description, "All property values increase 10%%.");
-    national_deck[10].effect_percentage = 10;
-    national_deck[10].target_type = 1;  // Properties
-    strcpy(national_deck[10].target_region, "All");
-    
-    // Card 11: Currency Devaluation
-    strcpy(national_deck[11].name, "Currency Devaluation");
-    strcpy(national_deck[11].description, "All property values increase 20%%. Loan interest increases 10%%.");
-    national_deck[11].effect_percentage = 20;
-    national_deck[11].target_type = 0;  // All players
-    strcpy(national_deck[11].target_region, "All");
-    
-    // Card 12: Trade Agreement
-    strcpy(national_deck[12].name, "Trade Agreement");
-    strcpy(national_deck[12].description, "All property values increase 5%%. Rent increases 10%%.");
-    national_deck[12].effect_percentage = 10;
-    national_deck[12].target_type = 0;  // All players
-    strcpy(national_deck[12].target_region, "All");
-    
-    // Card 13: Banking Crisis
-    strcpy(national_deck[13].name, "Banking Crisis");
-    strcpy(national_deck[13].description, "Loan interest increases 25%%. Property values decrease 10%%.");
-    national_deck[13].effect_percentage = -10;
-    national_deck[13].target_type = 0;  // All players
-    strcpy(national_deck[13].target_region, "All");
-    
-    // Card 14: Real Estate Bubble
-    strcpy(national_deck[14].name, "Real Estate Bubble");
-    strcpy(national_deck[14].description, "Property values increase 25%%. Construction costs increase 20%%.");
-    national_deck[14].effect_percentage = 25;
-    national_deck[14].target_type = 1;  // Properties
-    strcpy(national_deck[14].target_region, "All");
-    
-    // Card 15: Tech Industry Growth
-    strcpy(national_deck[15].name, "Tech Industry Growth");
-    strcpy(national_deck[15].description, "Commercial properties increase 15%%. Rent increases 10%%.");
-    national_deck[15].effect_percentage = 15;
-    national_deck[15].target_type = 1;  // Properties
-    strcpy(national_deck[15].target_region, "Commercial");
-    
-    // Card 16: Education Reform
-    strcpy(national_deck[16].name, "Education Reform");
-    strcpy(national_deck[16].description, "Residential properties increase 10%%. Construction costs decrease 10%%.");
-    national_deck[16].effect_percentage = 10;
-    national_deck[16].target_type = 1;  // Properties
-    strcpy(national_deck[16].target_region, "Residential");
-    
-    // Card 17: Healthcare Investment
-    strcpy(national_deck[17].name, "Healthcare Investment");
-    strcpy(national_deck[17].description, "All property values increase 5%%. Rent increases 15%%.");
-    national_deck[17].effect_percentage = 15;
-    national_deck[17].target_type = 0;  // All players
-    strcpy(national_deck[17].target_region, "All");
-    
-    // Card 18: Transportation Upgrade
-    strcpy(national_deck[18].name, "Transportation Upgrade");
-    strcpy(national_deck[18].description, "Railway rent increases 25%%. Property values near railways increase 10%%.");
-    national_deck[18].effect_percentage = 10;
-    national_deck[18].target_type = 1;  // Properties
-    strcpy(national_deck[18].target_region, "Railway");
-    
-    // Card 19: Energy Crisis
-    strcpy(national_deck[19].name, "Energy Crisis");
-    strcpy(national_deck[19].description, "Utility rent increases 20%%. Property development costs increase 15%%.");
-    national_deck[19].effect_percentage = 20;
-    national_deck[19].target_type = 1;  // Properties
-    strcpy(national_deck[19].target_region, "Utility");
-    
-    // Reset deck index
+    national_deck[0] = (EventCard){"Tourism Hype", "Hotels earn double rent for 5 rounds.", 100, 5, 1, "Hotels"};
+    national_deck[1] = (EventCard){"Fuel Shortage", "Railway rent doubles for 5 rounds.", 100, 5, 1, "Railway"};
+    national_deck[2] = (EventCard){"Heavy Floods", "A random coastal property is damaged.", 0, 0, 1, "Coastal"};
+    national_deck[3] = (EventCard){"Political Rally", "One random property is closed for 2 rounds.", 0, 2, 1, "Random Property"};
+    national_deck[4] = (EventCard){"Stock Market Rise", "All property values increase by 10%.", 10, 15, 1, "All"};
+    national_deck[5] = (EventCard){"Economic Downturn", "All property values decrease by 15%.", -15, 15, 1, "All"};
+    national_deck[6] = (EventCard){"Housing Subsidy", "House construction cost is reduced by 30%.", -30, 15, 1, "All"};
+    national_deck[7] = (EventCard){"Interest Rate Cut", "The current interest rate decreases by 2%.", -2, 15, 0, "All"};
+    national_deck[8] = (EventCard){"Interest Rate Increase", "The current interest rate increases by 2%.", 2, 15, 0, "All"};
+    national_deck[9] = (EventCard){"Tax Amnesty", "Each player receives LKR 2,000.", 2000, 0, 0, "All Players"};
+    national_deck[10] = (EventCard){"Power Failure", "Utility income is halved for 3 rounds.", -50, 3, 1, "Utility"};
+    national_deck[11] = (EventCard){"Foreign Funding", "Commercial property values increase by 15%.", 15, 15, 1, "Commercial"};
+    national_deck[12] = (EventCard){"Port Expansion", "Railway station values increase by 20%.", 20, 15, 1, "Railway"};
+    national_deck[13] = (EventCard){"Festival Season", "Hotels receive 50% additional rent.", 50, 15, 1, "Hotels"};
+    national_deck[14] = (EventCard){"Labour Strike", "Construction is suspended for 2 rounds.", 0, 2, 0, "All"};
+    national_deck[15] = (EventCard){"Insurance Discount", "Insurance premiums are reduced by 20%.", -20, 15, 0, "All"};
+    national_deck[16] = (EventCard){"Property Revaluation", "A random property group appreciates by 15%.", 15, 15, 2, "Random Group"};
+    national_deck[17] = (EventCard){"Currency Depreciation", "Construction costs increase by 10%.", 10, 15, 0, "All"};
+    national_deck[18] = (EventCard){"Government Grant", "A random player receives LKR 5,000.", 5000, 0, 0, "Random Player"};
+    national_deck[19] = (EventCard){"National Disaster", "A random developed property is damaged.", 0, 0, 1, "Developed Property"};
+
     deck_index = 0;
+}
+
+static void execute_event_card(GameState* game, EventCard* card) {
+    if (strcmp(card->name, "Heavy Floods") == 0) {
+        int property_index = choose_random_property(0, 1);
+        damage_property_from_card(property_index);
+    }
+    else if (strcmp(card->name, "Political Rally") == 0) {
+        int property_index = choose_random_property(0, 0);
+
+        if (property_index == -1) {
+            printf("  No owned property was available to close.\n");
+        } else {
+            property_array[property_index].event_closed_rounds = 2;
+            printf("  %s is closed for 2 rounds.\n",
+                   property_array[property_index].property_name);
+        }
+    }
+    else if (strcmp(card->name, "Interest Rate Cut") == 0) {
+        game->current_interest_rate -= 2;
+        if (game->current_interest_rate < 0) {
+            game->current_interest_rate = 0;
+        }
+        printf("  Loan interest is now %d%%.\n", game->current_interest_rate);
+    }
+    else if (strcmp(card->name, "Interest Rate Increase") == 0) {
+        game->current_interest_rate += 2;
+        printf("  Loan interest is now %d%%.\n", game->current_interest_rate);
+    }
+    else if (strcmp(card->name, "Tax Amnesty") == 0) {
+        for (int i = 0; i < MAX_PLAYERS; i++) {
+            if (!game->players[i].is_bankrupt) {
+                game->players[i].cash += 2000;
+            }
+        }
+        printf("  Every solvent player received LKR 2,000.\n");
+    }
+    else if (strcmp(card->name, "Property Revaluation") == 0) {
+        PropertyGroup groups[] = {
+            GROUP_BROWN, GROUP_LIGHT_BLUE, GROUP_PINK, GROUP_ORANGE,
+            GROUP_RED, GROUP_YELLOW, GROUP_GREEN, GROUP_DARK_BLUE
+        };
+
+        game->national_event.affected_group = groups[rand() % 8];
+        printf("  One random property group will receive 15%% appreciation.\n");
+    }
+    else if (strcmp(card->name, "Government Grant") == 0) {
+        int eligible_players[MAX_PLAYERS];
+        int eligible_count = 0;
+
+        for (int i = 0; i < MAX_PLAYERS; i++) {
+            if (!game->players[i].is_bankrupt) {
+                eligible_players[eligible_count] = i;
+                eligible_count++;
+            }
+        }
+
+        if (eligible_count > 0) {
+            int winner = eligible_players[rand() % eligible_count];
+            game->players[winner].cash += 5000;
+            printf("  %s received LKR 5,000.\n",
+                   game->players[winner].player_name);
+        }
+    }
+    else if (strcmp(card->name, "National Disaster") == 0) {
+        int property_index = choose_random_property(1, 0);
+        damage_property_from_card(property_index);
+    }
+    else {
+        printf("  The temporary modifier is now active.\n");
+    }
 }
 
 void draw_event_card(GameState* game) {
@@ -265,11 +246,22 @@ void draw_event_card(GameState* game) {
     
     // Apply the card effect to game state
     game->national_event.is_active = 1;
-    game->national_event.rounds_remaining = 15;
+    game->national_event.rounds_remaining = card.duration_rounds;
     game->national_event.effect_percentage = card.effect_percentage;
+    game->national_event.affected_group = GROUP_NONE;
     strcpy(game->national_event.event_name, card.name);
+
+    execute_event_card(game, &card);
+
+    if (card.duration_rounds == 0) {
+        game->national_event.is_active = 0;
+    }
     
-    printf("  Effect active for 15 rounds.\n");
+    if (card.duration_rounds > 0) {
+        printf("  Effect duration: %d rounds.\n", card.duration_rounds);
+    } else {
+        printf("  This card has an immediate effect.\n");
+    }
 }
 
 void process_national_event(GameState* game) {
@@ -587,6 +579,18 @@ void check_disaster(GameState* game) {
 
 void update_event_durations(GameState* game) {
     if (game == NULL) return;
+
+    // Reduce temporary property closures created by Political Rally.
+    for (int i = 0; i < MAX_PROPERTIES; i++) {
+        if (property_array[i].event_closed_rounds > 0) {
+            property_array[i].event_closed_rounds--;
+
+            if (property_array[i].event_closed_rounds == 0) {
+                printf("  %s has reopened after the Political Rally.\n",
+                       property_array[i].property_name);
+            }
+        }
+    }
     
     // ============================================
     // 1. NATIONAL EVENT
@@ -690,34 +694,36 @@ void update_event_durations(GameState* game) {
 int apply_event_rent_modifiers(Property* prop, GameState* game, int current_rent) {
     if (game == NULL || prop == NULL) return current_rent;
     
-    // 1. Tourism Boom: Hotels get double rent
+    // Tourism Hype: hotels get double rent
     if (game->national_event.is_active &&
-        strcmp(game->national_event.event_name, "Tourism Boom") == 0) {
+        strcmp(game->national_event.event_name, "Tourism Hype") == 0) {
         if (prop->building_count == 5) {  // Hotel
             current_rent *= 2;
         }
     }
     
-    // 2. Fuel Crisis: Railway rent doubles
+    // Fuel Shortage: railway rent doubles
     if (game->national_event.is_active &&
-        strcmp(game->national_event.event_name, "Fuel Crisis") == 0) {
+        strcmp(game->national_event.event_name, "Fuel Shortage") == 0) {
         if (prop->color_group == GROUP_RAILWAY) {
             current_rent *= 2;
         }
     }
-    
-    // 3. Political Interest: Hotel rent drops by 50%
+
+    // Power Failure: utility income is halved
     if (game->national_event.is_active &&
-        strcmp(game->national_event.event_name, "Political Interest") == 0) {
-        if (prop->building_count == 5) {  // Hotel
+        strcmp(game->national_event.event_name, "Power Failure") == 0) {
+        if (prop->color_group == GROUP_UTILITY) {
             current_rent = (current_rent * 50) / 100;
         }
     }
-    
-    // 4. Economic Recession: Rent decreases 10%
+
+    // Festival Season: hotels receive 50% additional rent
     if (game->national_event.is_active &&
-        strcmp(game->national_event.event_name, "Economic Recession") == 0) {
-        current_rent = (current_rent * 90) / 100;
+        strcmp(game->national_event.event_name, "Festival Season") == 0) {
+        if (prop->building_count == 5) {
+            current_rent = (current_rent * 150) / 100;
+        }
     }
     
     return current_rent;
@@ -727,44 +733,37 @@ int apply_event_rent_modifiers(Property* prop, GameState* game, int current_rent
 int apply_event_value_modifiers(Property* prop, GameState* game, int current_value) {
     if (game == NULL || prop == NULL) return current_value;
     
-    // 1. Economic Recession: Property values decrease 15%
+    // Economic Downturn: all property values decrease by 15%
     if (game->national_event.is_active &&
-        strcmp(game->national_event.event_name, "Economic Recession") == 0) {
+        strcmp(game->national_event.event_name, "Economic Downturn") == 0) {
         current_value = (current_value * 85) / 100;
     }
     
-    // 2. Stock Market Boom: Property values increase 10%
+    // Stock Market Rise: all property values increase by 10%
     if (game->national_event.is_active &&
-        strcmp(game->national_event.event_name, "Stock Market Boom") == 0) {
+        strcmp(game->national_event.event_name, "Stock Market Rise") == 0) {
         current_value = (current_value * 110) / 100;
     }
-    
-    // 3. Heavy Monsoon: Coastal properties lose 10% value
+
+    // Foreign Funding: standard commercial properties increase by 15%
     if (game->national_event.is_active &&
-        strcmp(game->national_event.event_name, "Heavy Monsoon") == 0) {
-        // Check if property is coastal (simplified: check region tags)
-        // For now, apply to all properties as placeholder
-        current_value = (current_value * 90) / 100;
+        strcmp(game->national_event.event_name, "Foreign Funding") == 0 &&
+        is_standard_property(prop)) {
+        current_value = (current_value * 115) / 100;
     }
-    
-    // 4. Foreign Investment: Commercial properties +20%
+
+    // Port Expansion: railway station values increase by 20%
     if (game->national_event.is_active &&
-        strcmp(game->national_event.event_name, "Foreign Investment") == 0) {
-        // Check if property is commercial
-        // For now, apply to all properties as placeholder
+        strcmp(game->national_event.event_name, "Port Expansion") == 0 &&
+        prop->color_group == GROUP_RAILWAY) {
         current_value = (current_value * 120) / 100;
     }
-    
-    // 5. Currency Devaluation: All property values +20%
+
+    // Property Revaluation: the selected property group appreciates by 15%
     if (game->national_event.is_active &&
-        strcmp(game->national_event.event_name, "Currency Devaluation") == 0) {
-        current_value = (current_value * 120) / 100;
-    }
-    
-    // 6. Real Estate Bubble: Property values +25%
-    if (game->national_event.is_active &&
-        strcmp(game->national_event.event_name, "Real Estate Bubble") == 0) {
-        current_value = (current_value * 125) / 100;
+        strcmp(game->national_event.event_name, "Property Revaluation") == 0 &&
+        prop->color_group == game->national_event.affected_group) {
+        current_value = (current_value * 115) / 100;
     }
     
     return current_value;
@@ -774,16 +773,16 @@ int apply_event_value_modifiers(Property* prop, GameState* game, int current_val
 int apply_event_construction_modifiers(int cost, GameState* game) {
     if (game == NULL) return cost;
     
-    // 1. Government Housing Programme: -25% construction costs
+    // Housing Subsidy: construction costs decrease by 30%
     if (game->national_event.is_active &&
-        strcmp(game->national_event.event_name, "Government Housing Programme") == 0) {
-        cost = (cost * 75) / 100;
+        strcmp(game->national_event.event_name, "Housing Subsidy") == 0) {
+        cost = (cost * 70) / 100;
     }
     
-    // 2. Fuel Crisis: +20% development costs
+    // Currency Depreciation: construction costs increase by 10%
     if (game->national_event.is_active &&
-        strcmp(game->national_event.event_name, "Fuel Crisis") == 0) {
-        cost = (cost * 120) / 100;
+        strcmp(game->national_event.event_name, "Currency Depreciation") == 0) {
+        cost = (cost * 110) / 100;
     }
     
     return cost;
@@ -793,10 +792,10 @@ int apply_event_construction_modifiers(int cost, GameState* game) {
 int apply_event_insurance_modifiers(int premium, GameState* game) {
     if (game == NULL) return premium;
     
-    // 1. Heavy Monsoon: Insurance premiums +10%
+    // Insurance Discount: premiums decrease by 20%
     if (game->national_event.is_active &&
-        strcmp(game->national_event.event_name, "Heavy Monsoon") == 0) {
-        premium = (premium * 110) / 100;
+        strcmp(game->national_event.event_name, "Insurance Discount") == 0) {
+        premium = (premium * 80) / 100;
     }
     
     return premium;
