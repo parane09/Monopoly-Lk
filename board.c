@@ -902,6 +902,13 @@ void init_board_data() {
 
 
     
+    // Initialize temporary fields shared by event and disaster systems.
+    for (int i = 0; i < prop_index; i++) {
+        property_array[i].event_closed_rounds = 0;
+        property_array[i].has_disaster_damage = 0;
+        property_array[i].pending_repair_cost = 0;
+    }
+
     // Verify we have exactly 28 properties
     if (prop_index != MAX_PROPERTIES) {
         printf("WARNING: Expected %d properties, but initialized %d\n", 

@@ -327,18 +327,24 @@ void process_inflation(GameState* game) {
         // Update property purchase price
         if (inflation_rate != 0) {
             prop->purchase_price = (prop->purchase_price * (100 + inflation_rate)) / 100;
-            prop->mortgage_value = (prop->mortgage_value * (100 + inflation_rate)) / 100;
             prop->base_rent = (prop->base_rent * (100 + inflation_rate)) / 100;
             prop->house_construction_cost = (prop->house_construction_cost * (100 + inflation_rate)) / 100;
             prop->hotel_construction_cost = (prop->hotel_construction_cost * (100 + inflation_rate)) / 100;
         }
     }
+
+    // Railway and utility rents use tables and dice instead of base_rent.
+    game->special_rent_inflation_basis_points =
+        (game->special_rent_inflation_basis_points *
+         (100 + inflation_rate)) / 100;
     
     // Update loan interest rate
     if (inflation_rate != 0) {
-        game->current_interest_rate = (game->current_interest_rate * (100 + inflation_rate)) / 100;
-        if (game->current_interest_rate < 0) game->current_interest_rate = 0;
-        if (game->current_interest_rate > 25) game->current_interest_rate = 25;
+        game->current_interest_rate_basis_points =
+            (game->current_interest_rate_basis_points *
+             (100 + inflation_rate)) / 100;
+        game->current_interest_rate =
+            (game->current_interest_rate_basis_points + 50) / 100;
     }
     
     // Print results
@@ -350,6 +356,7 @@ void process_inflation(GameState* game) {
         printf("  📊 No inflation this period.\n");
     }
     printf("  Current loan interest rate: %d%%\n", game->current_interest_rate);
+    printf("  Insurance premiums and repair costs use the recalculated values.\n");
 }
 
 void process_government_regulation(GameState* game) {
@@ -574,37 +581,48 @@ void check_disaster(GameState* game) {
     printf("  🚨 %s strikes %s!\n", disaster, prop->property_name);
     printf("     Damage: LKR %d\n", damage);
     
-    // Check if property has insurance
-    if (prop->insurance_policy != INSURANCE_NONE) {
-        // Process insurance claim
-        int compensation = process_disaster_claim(prop, damage);
-        if (compensation > 0) {
-            // Add compensation to owner's cash
-            Player* owner = &game->players[prop->owner_id];
-            owner->cash += compensation;
-            printf("     💰 Insurance compensation: LKR %d\n", compensation);
-            printf("     Net loss: LKR %d\n", damage - compensation);
-            
-            // Deduct remaining damage from owner
-            if (compensation < damage) {
-                owner->cash -= (damage - compensation);
-            }
-        }
+    Player* owner = &game->players[prop->owner_id];
+    int compensation = process_disaster_claim(
+        prop, damage, disaster, game);
+
+    // Compensation is credited before the automatic repair attempt.
+    if (compensation > 0) {
+        owner->cash += compensation;
+        printf("     Insurance compensation credited: LKR %d\n", compensation);
+    }
+
+    prop->has_disaster_damage = 1;
+    prop->pending_repair_cost = damage;
+
+    if (owner->cash >= prop->pending_repair_cost) {
+        owner->cash -= prop->pending_repair_cost;
+        printf("     Automatic repair completed for LKR %d.\n",
+               prop->pending_repair_cost);
+        prop->has_disaster_damage = 0;
+        prop->pending_repair_cost = 0;
+        prop->condition_percentage = 100;
     } else {
-        // No insurance - owner pays full damage
+        printf("     Owner cannot yet afford repairs. Building is closed.\n");
+    }
+}
+
+void process_pending_disaster_repairs(GameState* game) {
+    if (game == NULL) return;
+
+    for (int i = 0; i < MAX_PROPERTIES; i++) {
+        Property* prop = &property_array[i];
+        if (!prop->has_disaster_damage || prop->owner_id == -1) continue;
+
         Player* owner = &game->players[prop->owner_id];
-        if (owner->cash >= damage) {
-            owner->cash -= damage;
-            printf("     💰 Owner pays full repair cost: LKR %d\n", damage);
-        } else {
-            // Can't afford repair - property becomes damaged
-            printf("     ⚠️ Owner cannot afford repair!\n");
-            // Mark property as damaged (condition drops)
-            prop->condition_percentage -= 20;
-            if (prop->condition_percentage < 0) {
-                prop->condition_percentage = 0;
-            }
-        }
+        if (owner->is_bankrupt || owner->cash < prop->pending_repair_cost) continue;
+
+        owner->cash -= prop->pending_repair_cost;
+        printf("  Automatic disaster repair: %s paid LKR %d for %s.\n",
+               owner->player_name, prop->pending_repair_cost,
+               prop->property_name);
+        prop->has_disaster_damage = 0;
+        prop->pending_repair_cost = 0;
+        prop->condition_percentage = 100;
     }
 }
 
@@ -850,6 +868,12 @@ int apply_event_rent_modifiers(Property* prop, GameState* game,
 
     ActiveEvent* national = &game->national_event;
     ActiveEvent* card = get_player_event(game, player_id);
+
+    if (prop->color_group == GROUP_RAILWAY ||
+        prop->color_group == GROUP_UTILITY) {
+        current_rent =
+            (current_rent * game->special_rent_inflation_basis_points) / 10000;
+    }
 
     if (national->is_active &&
         strcmp(national->event_name, "Tourism Boom") == 0 &&

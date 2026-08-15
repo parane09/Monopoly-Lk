@@ -118,6 +118,8 @@ typedef struct {
     int condition_percentage;  // 0-100, starts at 100
     int rounds_since_maintenance;
     int has_structural_damage; // 0 = no, 1 = yes
+    int has_disaster_damage;   // Disaster damage closes the building
+    int pending_repair_cost;   // Amount required for automatic repair
     int value_reduction;       // Percentage reduction (0-30)
     int event_closed_rounds;   // Temporary closure caused by an event card
     
@@ -243,6 +245,8 @@ typedef struct {
     // Current rates
     int current_inflation_rate;    // -3 to 12 (percesntage)
     int current_interest_rate;     // Base loan interest rate
+    int current_interest_rate_basis_points; // 800 means 8.00%
+    int special_rent_inflation_basis_points; // 10000 means 100%
     int market_effects_applied;
     
 } GameState;
@@ -306,7 +310,8 @@ void unlock_collateral(Player* player);
 int calculate_insurance_premium(Property* prop, int policy_type);
 int buy_insurance(Player* player, int property_index, int policy_type, GameState* game);
 void process_insurance_expiry(Property* prop);
-int process_disaster_claim(Property* prop, int damage_cost);
+int process_disaster_claim(Property* prop, int damage_cost,
+                           const char* disaster_type, GameState* game);
 int has_active_insurance(Property* prop);
 int get_insurance_reminder(Property* prop);
 const char* get_insurance_policy_name(int policy_type);
@@ -351,6 +356,7 @@ void print_property_depreciation(Player* player);
 void end_of_round_processing(GameState* game);
 void process_inflation(GameState* game);
 void check_disaster(GameState* game);
+void process_pending_disaster_repairs(GameState* game);
 void process_market_review(GameState* game);
 void process_national_event(GameState* game);
 void process_regional_development(GameState* game);

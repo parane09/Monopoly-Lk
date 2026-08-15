@@ -30,6 +30,8 @@ void init_game(GameState* game) {
     // Initialize economic rates
     game->current_inflation_rate = 0;
     game->current_interest_rate = 8;  // Base interest rate (8%)
+    game->current_interest_rate_basis_points = 800;
+    game->special_rent_inflation_basis_points = 10000;
     
     // Clear all active events
     game->national_event.is_active = 0;
@@ -807,6 +809,9 @@ void end_of_round_processing(GameState* game) {
             process_insurance_expiry(prop);
         }
     }
+
+    // Repair previously damaged buildings as soon as their owners can pay.
+    process_pending_disaster_repairs(game);
     
     // ============================================
     // 3. BUILDING CONDITION

@@ -136,6 +136,8 @@ void declare_bankruptcy(Player* player, const char* reason) {
         prop->building_count = 0;
         prop->insurance_policy = INSURANCE_NONE;
         prop->insurance_rounds_remaining = 0;
+        prop->has_disaster_damage = 0;
+        prop->pending_repair_cost = 0;
     }
 
     player->owned_property_count = 0;
@@ -575,7 +577,8 @@ void process_insurance_expiry(Property* prop) {
 
 // Process a disaster claim - returns compensation amount
 // Returns: Compensation in LKR, or 0 if no insurance
-int process_disaster_claim(Property* prop, int damage_cost) {
+int process_disaster_claim(Property* prop, int damage_cost,
+                           const char* disaster_type, GameState* game) {
     if (prop == NULL) return 0;
     if (prop->insurance_policy == INSURANCE_NONE) {
         printf("  No insurance on %s. Owner must pay full repair cost: LKR %d\n",
@@ -593,6 +596,11 @@ int process_disaster_claim(Property* prop, int damage_cost) {
     
     switch (prop->insurance_policy) {
         case INSURANCE_BASIC:
+            if (strcmp(disaster_type, "Fire") != 0 &&
+                strcmp(disaster_type, "Flood") != 0) {
+                printf("  Basic Insurance does not cover %s.\n", disaster_type);
+                return 0;
+            }
             // 80% of repair cost
             compensation = (damage_cost * 80) / 100;
             printf("  Basic Insurance covers 80%% of LKR %d = LKR %d\n",
@@ -600,6 +608,13 @@ int process_disaster_claim(Property* prop, int damage_cost) {
             break;
             
         case INSURANCE_COMPREHENSIVE:
+            if (strcmp(disaster_type, "Fire") != 0 &&
+                strcmp(disaster_type, "Flood") != 0 &&
+                strcmp(disaster_type, "Riot") != 0) {
+                printf("  Comprehensive Insurance does not cover %s.\n",
+                       disaster_type);
+                return 0;
+            }
             // 100% of repair cost
             compensation = damage_cost;
             printf("  Comprehensive Insurance covers 100%% = LKR %d\n", compensation);
@@ -608,9 +623,10 @@ int process_disaster_claim(Property* prop, int damage_cost) {
         case INSURANCE_BUSINESS:
             // Repair cost + 5 rounds lost hotel rental income
             if (prop->building_count == 5) {  // Has hotel
-                int lost_rent = prop->base_rent * 5;
-                // Apply rent multiplier for hotel (10x)
-                lost_rent = lost_rent * 10;
+                int lost_rent = calculate_rent_with_buildings(prop);
+                lost_rent = apply_event_rent_modifiers(
+                    prop, game, prop->owner_id, lost_rent);
+                lost_rent *= 5;
                 compensation = damage_cost + lost_rent;
                 printf("  Business Interruption covers repair + 5 rounds hotel rent = LKR %d\n",
                        compensation);
@@ -1235,6 +1251,7 @@ void process_structural_damage(Property* prop) {
 int is_building_closed(Property* prop) {
     if (prop == NULL) return 1;  // NULL considered closed
     if (prop->event_closed_rounds > 0) return 1; // Closed by Political Rally
+    if (prop->has_disaster_damage) return 1; // Closed until disaster repair
     if (prop->building_count == 0) return 0;  // No building = not closed
     
     return (prop->condition_percentage < 25);
