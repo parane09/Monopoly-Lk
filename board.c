@@ -13,6 +13,79 @@ Square board_array[BOARD_SIZE];
 // Define the properties array (28 properties)
 Property property_array[MAX_PROPERTIES];
 
+typedef struct {
+    const char* property_name;
+    unsigned int classifications;
+} PropertyClassificationEntry;
+
+// Event targeting map derived from the named property sets in the assignment.
+// Commercial and low-lying classifications are implementation mappings because
+// the assignment uses those categories without enumerating their membership.
+static const PropertyClassificationEntry property_classification_map[] = {
+    {"Pettah", PROPERTY_CLASS_COMMERCIAL | PROPERTY_CLASS_PORT_CITY_TARGET},
+    {"Maradana", PROPERTY_CLASS_COMMERCIAL | PROPERTY_CLASS_PORT_CITY_TARGET},
+    {"Colombo Fort Railway Station", PROPERTY_CLASS_PORT_CITY_TARGET},
+
+    {"Bambalapitiya", PROPERTY_CLASS_COASTAL | PROPERTY_CLASS_LOW_LYING_COASTAL},
+    {"Wellawatte", PROPERTY_CLASS_COASTAL | PROPERTY_CLASS_LOW_LYING_COASTAL},
+    {"Mount Lavinia", PROPERTY_CLASS_COASTAL | PROPERTY_CLASS_LOW_LYING_COASTAL},
+
+    {"Maharagama", PROPERTY_CLASS_IT_GROWTH_TARGET},
+    {"Nugegoda", PROPERTY_CLASS_COMMERCIAL | PROPERTY_CLASS_IT_GROWTH_TARGET},
+    {"Kottawa", PROPERTY_CLASS_IT_GROWTH_TARGET},
+
+    {"Ceylon Electricity Board", PROPERTY_CLASS_ELECTRICITY_UTILITY},
+
+    {"Negombo", PROPERTY_CLASS_COASTAL | PROPERTY_CLASS_LOW_LYING_COASTAL |
+                PROPERTY_CLASS_AIRPORT_TARGET},
+    {"Katunayake", PROPERTY_CLASS_COMMERCIAL | PROPERTY_CLASS_AIRPORT_TARGET},
+    {"Ja-Ela", PROPERTY_CLASS_AIRPORT_TARGET},
+
+    {"Kandy City", PROPERTY_CLASS_COMMERCIAL | PROPERTY_CLASS_UNIVERSITY_TARGET},
+    {"Peradeniya", PROPERTY_CLASS_UNIVERSITY_TARGET},
+
+    {"Galle Fort", PROPERTY_CLASS_COASTAL | PROPERTY_CLASS_SOUTHERN_COASTAL |
+                   PROPERTY_CLASS_LOW_LYING_COASTAL | PROPERTY_CLASS_COMMERCIAL},
+    {"Unawatuna", PROPERTY_CLASS_COASTAL | PROPERTY_CLASS_SOUTHERN_COASTAL |
+                  PROPERTY_CLASS_LOW_LYING_COASTAL | PROPERTY_CLASS_WATER_NEIGHBOUR},
+    {"Hikkaduwa", PROPERTY_CLASS_COASTAL | PROPERTY_CLASS_SOUTHERN_COASTAL |
+                  PROPERTY_CLASS_LOW_LYING_COASTAL | PROPERTY_CLASS_WATER_NEIGHBOUR},
+    {"National Water Supply and Drainage Board", PROPERTY_CLASS_WATER_UTILITY},
+
+    {"Jaffna Town", PROPERTY_CLASS_COMMERCIAL | PROPERTY_CLASS_NORTHERN_DEV_TARGET},
+    {"Nallur", PROPERTY_CLASS_NORTHERN_DEV_TARGET},
+    {"Trincomalee", PROPERTY_CLASS_COASTAL | PROPERTY_CLASS_LOW_LYING_COASTAL |
+                    PROPERTY_CLASS_COMMERCIAL | PROPERTY_CLASS_NORTHERN_DEV_TARGET},
+
+    {"Nuwara Eliya", PROPERTY_CLASS_TEA_EXPORT_TARGET},
+    {"Galle Face", PROPERTY_CLASS_COASTAL | PROPERTY_CLASS_LOW_LYING_COASTAL |
+                   PROPERTY_CLASS_COMMERCIAL}
+};
+
+static void initialize_property_classifications(void) {
+    size_t map_count = sizeof(property_classification_map) /
+                       sizeof(property_classification_map[0]);
+
+    for (int i = 0; i < MAX_PROPERTIES; i++) {
+        property_array[i].classification_flags = PROPERTY_CLASS_NONE;
+
+        for (size_t j = 0; j < map_count; j++) {
+            if (strcmp(property_array[i].property_name,
+                       property_classification_map[j].property_name) == 0) {
+                property_array[i].classification_flags =
+                    property_classification_map[j].classifications;
+                break;
+            }
+        }
+    }
+}
+
+int property_has_classification(const Property* prop,
+                                PropertyClassification classification) {
+    if (prop == NULL || classification == PROPERTY_CLASS_NONE) return 0;
+    return (prop->classification_flags & (unsigned int)classification) != 0;
+}
+
 // ============================================
 // BOARD INITIALIZATION
 // ============================================
@@ -907,6 +980,8 @@ void init_board_data() {
         printf("WARNING: Expected %d properties, but initialized %d\n", 
                MAX_PROPERTIES, prop_index);
     }
+
+    initialize_property_classifications();
     
     
 }

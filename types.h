@@ -59,6 +59,24 @@ typedef enum {
     GROUP_UTILITY
 } PropertyGroup;
 
+// A property can belong to several event target sets at the same time.
+typedef enum {
+    PROPERTY_CLASS_NONE                 = 0,
+    PROPERTY_CLASS_COASTAL              = 1u << 0,
+    PROPERTY_CLASS_SOUTHERN_COASTAL     = 1u << 1,
+    PROPERTY_CLASS_LOW_LYING_COASTAL    = 1u << 2,
+    PROPERTY_CLASS_COMMERCIAL           = 1u << 3,
+    PROPERTY_CLASS_ELECTRICITY_UTILITY  = 1u << 4,
+    PROPERTY_CLASS_WATER_UTILITY        = 1u << 5,
+    PROPERTY_CLASS_PORT_CITY_TARGET     = 1u << 6,
+    PROPERTY_CLASS_IT_GROWTH_TARGET     = 1u << 7,
+    PROPERTY_CLASS_NORTHERN_DEV_TARGET  = 1u << 8,
+    PROPERTY_CLASS_TEA_EXPORT_TARGET    = 1u << 9,
+    PROPERTY_CLASS_AIRPORT_TARGET       = 1u << 10,
+    PROPERTY_CLASS_UNIVERSITY_TARGET    = 1u << 11,
+    PROPERTY_CLASS_WATER_NEIGHBOUR      = 1u << 12
+} PropertyClassification;
+
 // Player AI strategies
 typedef enum {
     STRATEGY_AGGRESSIVE,
@@ -120,6 +138,9 @@ typedef struct {
     
     // Group
     PropertyGroup color_group;
+
+    // Geographic/category flags used to target economic and regional events.
+    unsigned int classification_flags;
     
 } Property;
 
@@ -270,6 +291,8 @@ Property* get_property_at_position(int position);
 int is_property_square(int position);
 SquareType get_square_type(int position);
 int count_properties_in_group(Player* player, PropertyGroup group);
+int property_has_classification(const Property* prop,
+                                PropertyClassification classification);
 
 // Prototypes from finance.c
 int get_property_value(Property* prop);
