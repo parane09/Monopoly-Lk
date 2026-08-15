@@ -254,6 +254,8 @@ void run_game(GameState* game);
 Player* get_player_by_id(GameState* game, int player_id);
 int get_round(const GameState* game);
 int check_game_over(GameState* game);
+Player* determine_winner(GameState* game);
+void print_winner_details(const Player* winner);
 int determine_first_player(GameState* game);
 void process_turn(GameState* game, Player* player);
 void resolve_landing(GameState* game, Player* player);
@@ -326,6 +328,7 @@ void update_property_age(Property* prop);
 int calculate_depreciation(Property* prop);
 int get_depreciated_value(Property* prop);
 int needs_renovation(Property* prop);
+int calculate_total_property_value(Player* player);
 int calculate_net_worth(Player* player);
 void print_property_depreciation(Player* player);
 

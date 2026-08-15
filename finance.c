@@ -1375,44 +1375,49 @@ int renovate_property(Player* player, int property_index) {
     return 1;
 }
 
-// Calculate net worth of a player including depreciated values
-int calculate_net_worth(Player* player) {
-    if (player == NULL) return 0;
-    if (player->is_bankrupt) return 0;
-    
-    int net_worth = player->cash;
-    
-    // Add property values (using depreciated value)
-    for (int i = 0; i < player->owned_property_count; i++) {
-        int prop_idx = player->owned_property_indices[i];
-        if (prop_idx < 0 || prop_idx >= MAX_PROPERTIES) continue;
-        
-        Property* prop = &property_array[prop_idx];
-        
-        // Add property value (with depreciation)
-        net_worth += get_depreciated_value(prop);
-        
-        // Add building value
-        if (prop->building_count > 0) {
-            int building_value = 0;
-            if (prop->building_count == 5) {
-                // Hotel value = hotel construction cost
-                building_value = prop->hotel_construction_cost;
-            } else {
-                // House value = house construction cost × number of houses
-                building_value = prop->house_construction_cost * prop->building_count;
-            }
-            net_worth += building_value;
+// Current value of all property, building, railway, and utility assets.
+int calculate_total_property_value(Player* player) {
+    if (player == NULL || player->is_bankrupt) return 0;
+
+    int total_value = 0;
+
+    for (int i = 0; i < MAX_PROPERTIES; i++) {
+        Property* prop = &property_array[i];
+        if (prop->owner_id != player->player_id) continue;
+
+        total_value += get_depreciated_value(prop);
+
+        // A hotel replaces four houses, so their values are not both counted.
+        if (prop->building_count == 5) {
+            total_value += prop->hotel_construction_cost;
+        } else if (prop->building_count > 0) {
+            total_value += prop->house_construction_cost * prop->building_count;
         }
-        
-        // Add railway/utility values (handled by property value already)
     }
-    
-    // Subtract loan amount
+
+    return total_value;
+}
+
+// Rule 15 net worth. Insurance claims and taxes have no pending balances in
+// the current model because both are settled immediately. Accrued interest is
+// already compounded into player_loan.current_amount.
+int calculate_net_worth(Player* player) {
+    if (player == NULL || player->is_bankrupt) return 0;
+
+    int net_worth = player->cash + calculate_total_property_value(player);
+
     if (player->player_loan.is_active) {
         net_worth -= player->player_loan.current_amount;
     }
-    
+
+    // The property remains an asset while its mortgage is a liability.
+    for (int i = 0; i < MAX_PROPERTIES; i++) {
+        Property* prop = &property_array[i];
+        if (prop->owner_id == player->player_id && prop->is_mortgaged) {
+            net_worth -= prop->mortgage_value;
+        }
+    }
+
     return net_worth;
 }
 

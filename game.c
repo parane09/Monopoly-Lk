@@ -159,15 +159,16 @@ void print_game_start(GameState* game) {
 // ============================================
 
 void run_game(GameState* game) {
+    if (game == NULL) return;
+
     printf("Starting simulation...\n");
     printf("Maximum Rounds: %d\n\n", MAX_ROUNDS);
 
     game->round_number = get_round(game);
+    printf("\n========== Round %d ==========\n", game->round_number);
 
-    while (game->round_number <= MAX_ROUNDS && !game->is_game_over) {
-        printf("\n========== Round %d ==========\n", game->round_number);
-
-        for(int i =0; i<MAX_PLAYERS; i++){
+    while (game->round_number <= 2 && !game->is_game_over) {
+        for (int i = 0; i < MAX_PLAYERS; i++) {
             int player_idx = (game->starting_player_index + i) % MAX_PLAYERS;
             Player* player = &game->players[player_idx];
 
@@ -186,22 +187,46 @@ void run_game(GameState* game) {
                     player->jail_turns_served = 0;
                     printf("  %s has been released from jail\n", player->player_name);
                 }
-                continue;
-            }
-
-            process_turn(game, player);
-
-            int updated_round = get_round(game);
-            while (game->round_number < updated_round) {
-                game->round_number++;
-                end_of_round_processing(game);
+            } else {
+                process_turn(game, player);
             }
 
             if (check_game_over(game)) {
                 break;
             }
+
+            // Recalculate after every turn. The shared round advances only
+            // when every solvent player has passed GO for that round.
+            int updated_round = get_round(game);
+            while (game->round_number < updated_round &&
+                   game->round_number <= MAX_ROUNDS) {
+                end_of_round_processing(game);
+                game->round_number++;
+
+                if (check_game_over(game)) {
+                    break;
+                }
+
+                if (game->round_number <= MAX_ROUNDS) {
+                    printf("\n========== Round %d ==========\n",
+                           game->round_number);
+                }
+            }
+
+            if (game->round_number > MAX_ROUNDS || game->is_game_over) {
+                break;
+            }
         }
     }
+
+    // Keep the final displayed round within the simulation limit.
+    if (game->round_number > MAX_ROUNDS) {
+        game->round_number = MAX_ROUNDS;
+    }
+
+    game->is_game_over = 1;
+    Player* winner = determine_winner(game);
+    print_winner_details(winner);
 }
 
 
@@ -217,8 +242,8 @@ Player* get_player_by_id(GameState* game, int player_id) {
     return NULL;
 }
 
-// Return the lowest personal round among players who can currently advance.
-// If every active player is in jail, the game round remains unchanged.
+// A game round is one more than the fewest GO passes among solvent players.
+// Jailed players remain included because they have not passed GO while jailed.
 int get_round(const GameState* game) {
     int minimum_round = 0;
     int found_eligible_player = 0;
@@ -226,7 +251,7 @@ int get_round(const GameState* game) {
     for (int i = 0; i < MAX_PLAYERS; i++) {
         const Player* player = &game->players[i];
 
-        if (player->is_bankrupt || player->is_in_jail) {
+        if (player->is_bankrupt) {
             continue;
         }
 
@@ -260,6 +285,64 @@ int check_game_over(GameState* game) {
     }
     
     return 0;
+}
+
+// Select the solvent player with the highest assignment-defined net worth.
+// The assignment does not define ties, so cash and then player ID are used to
+// produce a deterministic result.
+Player* determine_winner(GameState* game) {
+    if (game == NULL) return NULL;
+
+    Player* winner = NULL;
+    int highest_net_worth = 0;
+
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        Player* candidate = &game->players[i];
+        if (candidate->is_bankrupt) continue;
+
+        int candidate_net_worth = calculate_net_worth(candidate);
+        if (winner == NULL || candidate_net_worth > highest_net_worth ||
+            (candidate_net_worth == highest_net_worth &&
+             candidate->cash > winner->cash) ||
+            (candidate_net_worth == highest_net_worth &&
+             candidate->cash == winner->cash &&
+             candidate->player_id < winner->player_id)) {
+            winner = candidate;
+            highest_net_worth = candidate_net_worth;
+        }
+    }
+
+    game->winner_player_id = (winner != NULL) ? winner->player_id : -1;
+    return winner;
+}
+
+// End-of-game output format from the assignment specification.
+void print_winner_details(const Player* winner) {
+    printf("\n=============================================\n");
+    printf("GAME OVER\n");
+
+    if (winner == NULL) {
+        printf("Winner\nNone - all players are bankrupt\n");
+        printf("=============================================\n");
+        return;
+    }
+
+    int total_property_value =
+        calculate_total_property_value((Player*)winner);
+    int net_worth = calculate_net_worth((Player*)winner);
+
+    printf("Winner\n%s\n", winner->player_name);
+    printf("Total Cash\nLKR %d\n", winner->cash);
+    printf("Total Property Value\nLKR %d\n", total_property_value);
+    printf("Outstanding Loans\n");
+    if (winner->player_loan.is_active &&
+        winner->player_loan.current_amount > 0) {
+        printf("LKR %d\n", winner->player_loan.current_amount);
+    } else {
+        printf("None\n");
+    }
+    printf("Net Worth\nLKR %d\n", net_worth);
+    printf("=============================================\n");
 }
 
 int determine_first_player(GameState* game){
