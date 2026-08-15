@@ -60,11 +60,13 @@ void init_game(GameState* game) {
     game->market_boom.is_active = 0;
     game->market_boom.rounds_remaining = 0;
     game->market_boom.effect_percentage = 0;
+    game->market_boom.group = GROUP_NONE;
     strcpy(game->market_boom.group_name, "None");
     
     game->market_decline.is_active = 0;
     game->market_decline.rounds_remaining = 0;
     game->market_decline.effect_percentage = 0;
+    game->market_decline.group = GROUP_NONE;
     strcpy(game->market_decline.group_name, "None");
     
     // Initialize all 4 players
@@ -679,7 +681,7 @@ void resolve_landing(GameState* game, Player* player) {
                     if (repayment > 0) repay_loan(player, repayment);
                 }
             } else {
-                int max_loan = get_max_loan_amount(player);
+                int max_loan = get_max_loan_amount_with_market(player, game);
                 printf("  Maximum loan available: LKR %d\n", max_loan);
 
                 if (should_take_loan(player)) {
@@ -907,6 +909,7 @@ void buy_property(Player* player, Property* prop, GameState* game) {
     int purchase_price = get_property_value(prop);
     purchase_price = apply_event_value_modifiers(
         prop, game, player->player_id, purchase_price);
+    purchase_price = apply_market_purchase_modifier(prop, game, purchase_price);
 
     if (player->cash < purchase_price) return;
 
@@ -936,7 +939,9 @@ void start_auction(GameState* game, Property* prop) {
     int current_value = get_property_value(prop);
     current_value = apply_event_value_modifiers(
         prop, game, game->current_player_index, current_value);
+    current_value = apply_market_value_modifier(prop, game, current_value);
     int current_bid = current_value / 2;
+    current_bid = apply_market_auction_modifier(prop, game, current_bid);
 
     printf("\nAuction Started.\n");
     printf("Property :\n%s\n", prop->property_name);

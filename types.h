@@ -216,6 +216,7 @@ typedef struct {
 typedef struct {
     int is_active;
     char group_name[50];
+    PropertyGroup group;
     int rounds_remaining;
     int effect_percentage;
 } MarketCondition;
@@ -290,6 +291,7 @@ void print_player_finance(Player* player);
 
 // loan system
 int get_max_loan_amount(Player* player);
+int get_max_loan_amount_with_market(Player* player, GameState* game);
 int take_loan(Player* player, int amount, GameState* game);
 int repay_loan(Player* player, int amount);
 void apply_loan_interest(Player* player);
@@ -437,10 +439,15 @@ int apply_event_rent_modifiers(Property* prop, GameState* game,
                                int player_id, int current_rent);
 int apply_event_value_modifiers(Property* prop, GameState* game,
                                 int player_id, int current_value);
-int apply_event_construction_modifiers(int cost, GameState* game, int player_id);
+int apply_event_construction_modifiers(Property* prop, int cost,
+                                       GameState* game, int player_id);
 int apply_event_insurance_modifiers(int premium, GameState* game, int player_id);
 int apply_event_interest_modifiers(int rate, GameState* game, int player_id);
 int is_event_construction_suspended(GameState* game, int player_id);
+int apply_market_purchase_modifier(Property* prop, GameState* game, int value);
+int apply_market_value_modifier(Property* prop, GameState* game, int value);
+int apply_market_mortgage_modifier(Property* prop, GameState* game, int value);
+int apply_market_auction_modifier(Property* prop, GameState* game, int value);
 void remove_event_effects(GameState* game);
 
 #endif // TYPES_H

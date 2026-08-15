@@ -478,42 +478,36 @@ void process_market_review(GameState* game) {
     };
     int num_groups = 8;
     
-    // Select random group for boom
-    int boom_index = rand() % num_groups;
+    // A group cannot receive the same condition in consecutive reviews.
+    int boom_index;
+    do {
+        boom_index = rand() % num_groups;
+    } while (groups[boom_index] == game->market_boom.group);
     PropertyGroup boom_group = groups[boom_index];
     
     // Select random group for decline (different from boom)
     int decline_index;
     do {
         decline_index = rand() % num_groups;
-    } while (decline_index == boom_index);
+    } while (decline_index == boom_index ||
+             groups[decline_index] == game->market_decline.group);
     PropertyGroup decline_group = groups[decline_index];
     
     // Store boom in game state
     game->market_boom.is_active = 1;
     game->market_boom.rounds_remaining = 10;
     game->market_boom.effect_percentage = 20;  // +20% for boom
+    game->market_boom.group = boom_group;
     strcpy(game->market_boom.group_name, group_names[boom_index]);
     
     // Store decline in game state
     game->market_decline.is_active = 1;
     game->market_decline.rounds_remaining = 10;
     game->market_decline.effect_percentage = -15;  // -15% for decline
+    game->market_decline.group = decline_group;
     strcpy(game->market_decline.group_name, group_names[decline_index]);
     
-    // Apply boom effects to properties in that group
-    for (int i = 0; i < MAX_PROPERTIES; i++) {
-        if (property_array[i].color_group == boom_group) {
-            property_array[i].purchase_price = (property_array[i].purchase_price * 120) / 100;
-            property_array[i].mortgage_value = (property_array[i].mortgage_value * 120) / 100;
-            property_array[i].base_rent = (property_array[i].base_rent * 125) / 100;
-        }
-        if (property_array[i].color_group == decline_group) {
-            property_array[i].purchase_price = (property_array[i].purchase_price * 85) / 100;
-            property_array[i].mortgage_value = (property_array[i].mortgage_value * 90) / 100;
-            property_array[i].base_rent = (property_array[i].base_rent * 80) / 100;
-        }
-    }
+    // Do not rewrite base values. Active conditions are applied when needed.
     
     printf("  📈 BOOM: %s Group (+20%% value, +25%% rent)\n", group_names[boom_index]);
     printf("  📉 DECLINE: %s Group (-15%% value, -20%% rent)\n", group_names[decline_index]);
@@ -784,6 +778,16 @@ int apply_event_rent_modifiers(Property* prop, GameState* game,
         prop->building_count == 5) {
         current_rent = (current_rent * 150) / 100;
     }
+
+    if (game->market_boom.is_active &&
+        prop->color_group == game->market_boom.group) {
+        current_rent = (current_rent * 125) / 100;
+    }
+
+    if (game->market_decline.is_active &&
+        prop->color_group == game->market_decline.group) {
+        current_rent = (current_rent * 80) / 100;
+    }
     
     return current_rent;
 }
@@ -851,7 +855,8 @@ int apply_event_value_modifiers(Property* prop, GameState* game,
 }
 
 // Apply event effects to construction costs
-int apply_event_construction_modifiers(int cost, GameState* game, int player_id) {
+int apply_event_construction_modifiers(Property* prop, int cost,
+                                       GameState* game, int player_id) {
     if (game == NULL) return cost;
 
     ActiveEvent* national = &game->national_event;
@@ -871,6 +876,11 @@ int apply_event_construction_modifiers(int cost, GameState* game, int player_id)
     }
 
     if (card != NULL && strcmp(card->event_name, "Currency Depreciation") == 0) {
+        cost = (cost * 110) / 100;
+    }
+
+    if (prop != NULL && game->market_boom.is_active &&
+        prop->color_group == game->market_boom.group) {
         cost = (cost * 110) / 100;
     }
     
@@ -928,5 +938,64 @@ int is_event_construction_suspended(GameState* game, int player_id) {
     ActiveEvent* card = get_player_event(game, player_id);
 
     return card != NULL && strcmp(card->event_name, "Labour Strike") == 0;
+}
+
+int apply_market_purchase_modifier(Property* prop, GameState* game, int value) {
+    if (prop == NULL || game == NULL) return value;
+
+    if (game->market_boom.is_active &&
+        prop->color_group == game->market_boom.group) {
+        value = (value * 115) / 100;
+    }
+
+    if (game->market_decline.is_active &&
+        prop->color_group == game->market_decline.group) {
+        value = (value * 85) / 100;
+    }
+
+    return value;
+}
+
+int apply_market_value_modifier(Property* prop, GameState* game, int value) {
+    if (prop == NULL || game == NULL) return value;
+
+    if (game->market_boom.is_active &&
+        prop->color_group == game->market_boom.group) {
+        value = (value * 120) / 100;
+    }
+
+    if (game->market_decline.is_active &&
+        prop->color_group == game->market_decline.group) {
+        value = (value * 85) / 100;
+    }
+
+    return value;
+}
+
+int apply_market_mortgage_modifier(Property* prop, GameState* game, int value) {
+    if (prop == NULL || game == NULL) return value;
+
+    if (game->market_boom.is_active &&
+        prop->color_group == game->market_boom.group) {
+        value = (value * 115) / 100;
+    }
+
+    if (game->market_decline.is_active &&
+        prop->color_group == game->market_decline.group) {
+        value = (value * 90) / 100;
+    }
+
+    return value;
+}
+
+int apply_market_auction_modifier(Property* prop, GameState* game, int value) {
+    if (prop == NULL || game == NULL) return value;
+
+    if (game->market_decline.is_active &&
+        prop->color_group == game->market_decline.group) {
+        value = (value * 75) / 100;
+    }
+
+    return value;
 }
 

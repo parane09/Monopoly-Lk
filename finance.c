@@ -169,6 +169,26 @@ int get_max_loan_amount(Player* player) {
     return max_loan;
 }
 
+int get_max_loan_amount_with_market(Player* player, GameState* game) {
+    if (player == NULL) return 0;
+
+    int total_mortgage_value = 0;
+
+    for (int i = 0; i < player->owned_property_count; i++) {
+        int property_index = player->owned_property_indices[i];
+        if (property_index < 0 || property_index >= MAX_PROPERTIES) continue;
+
+        Property* prop = &property_array[property_index];
+        if (prop->is_mortgaged || prop->is_loan_locked) continue;
+
+        int mortgage_value = apply_market_mortgage_modifier(
+            prop, game, prop->mortgage_value);
+        total_mortgage_value += mortgage_value;
+    }
+
+    return (total_mortgage_value * 75) / 100;
+}
+
 // Take a loan - player borrows money with properties as collateral
 // Returns: 1 = success, 0 = failure
 int take_loan(Player* player, int amount, GameState* game) {
@@ -181,7 +201,7 @@ int take_loan(Player* player, int amount, GameState* game) {
     }
     
     // Calculate maximum loan amount
-    int max_loan = get_max_loan_amount(player);
+    int max_loan = get_max_loan_amount_with_market(player, game);
     if (max_loan == 0) {
         printf("  %s has no eligible collateral for a loan.\n", player->player_name);
         return 0;
@@ -732,7 +752,7 @@ int can_build_house(Player* player, int property_index, GameState* game) {
     
     // Check if player has enough cash
     int cost = apply_event_construction_modifiers(
-        prop->house_construction_cost, game, player->player_id);
+        prop, prop->house_construction_cost, game, player->player_id);
     if (player->cash < cost) {
         printf("  Insufficient funds! House cost: LKR %d, Available: LKR %d\n", 
                cost, player->cash);
@@ -783,7 +803,7 @@ int build_house(Player* player, int property_index, GameState* game) {
     
     Property* prop = &property_array[property_index];
     int cost = apply_event_construction_modifiers(
-        prop->house_construction_cost, game, player->player_id);
+        prop, prop->house_construction_cost, game, player->player_id);
     
     // Deduct cost
     player->cash -= cost;
@@ -847,7 +867,7 @@ int can_build_hotel(Player* player, int property_index, GameState* game) {
     
     // Check if player has enough cash
     int cost = apply_event_construction_modifiers(
-        prop->hotel_construction_cost, game, player->player_id);
+        prop, prop->hotel_construction_cost, game, player->player_id);
     if (player->cash < cost) {
         printf("  Insufficient funds! Hotel cost: LKR %d, Available: LKR %d\n", 
                cost, player->cash);
@@ -884,7 +904,7 @@ int build_hotel(Player* player, int property_index, GameState* game) {
     
     Property* prop = &property_array[property_index];
     int cost = apply_event_construction_modifiers(
-        prop->hotel_construction_cost, game, player->player_id);
+        prop, prop->hotel_construction_cost, game, player->player_id);
     
     // Deduct cost
     player->cash -= cost;
@@ -1061,7 +1081,7 @@ int get_building_cost(Property* prop, GameState* game) {
     // Apply event modifiers
     if (game != NULL) {
         int player_id = prop->owner_id;
-        cost = apply_event_construction_modifiers(cost, game, player_id);
+        cost = apply_event_construction_modifiers(prop, cost, game, player_id);
     }
     
     return cost;
@@ -1417,6 +1437,7 @@ int calculate_total_property_value(Player* player, GameState* game) {
         int property_value = get_depreciated_value(prop);
         property_value = apply_event_value_modifiers(
             prop, game, player->player_id, property_value);
+        property_value = apply_market_value_modifier(prop, game, property_value);
         total_value += property_value;
 
         // A hotel replaces four houses, so their values are not both counted.
