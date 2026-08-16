@@ -8,12 +8,11 @@
 // CONSTANTS
 // ============================================
 
-// Inflation rates (from Rule-LK 12)
 // Possible values: -3, 0, 2, 5, 8, 12
 static const int INFLATION_RATES[] = {-3, 0, 2, 5, 8, 12};
 static const int NUM_INFLATION_RATES = 6;
 
-// Government regulation names (from Rule-LK 24)
+// Government regulation names
 static const char* REGULATION_NAMES[] = {
     "Increase Property Tax",
     "Reduce Loan Interest",
@@ -42,7 +41,6 @@ static const int NUM_DISASTERS = 5;
 // EVENT CARD DECK
 // ============================================
 
-// Event card structure
 typedef struct {
     char name[50];
     char description[100];
@@ -52,7 +50,7 @@ typedef struct {
     char target_region[50];
 } EventCard;
 
-// National event deck (20 cards)
+// National Event Card deck must contain exactly 20 cards.
 static EventCard national_deck[20];
 static int deck_index = 0;
 
@@ -245,14 +243,11 @@ void draw_event_card(GameState* game) {
     int player_index = game->current_player_index;
     ActiveEvent* player_event = &game->player_events[player_index];
     
-    // Draw the current card
     EventCard card = national_deck[deck_index];
     
-    // Advance deck index (wrap around)
     deck_index = (deck_index + 1) % 20;
     
-    // Print the card
-    printf("  🃏 EVENT CARD: %s\n", card.name);
+    printf("  EVENT CARD: %s\n", card.name);
     printf("     %s\n", card.description);
     
     // Store this card only for the player who drew it.
@@ -293,16 +288,13 @@ void process_national_event(GameState* game) {
     };
     int event_count = (int)(sizeof(economic_events) / sizeof(economic_events[0]));
     
-    printf("\n🏛️ NATIONAL EVENT TRIGGERED! (Every 15 Rounds)\n");
+    printf("\nNATIONAL EVENT TRIGGERED! (Every 15 Rounds)\n");
     
-    // Select from the separate periodic economic-event list.
     EventCard card = economic_events[rand() % event_count];
     
-    // Print the event
-    printf("  📜 %s\n", card.name);
+    printf("  %s\n", card.name);
     printf("     %s\n", card.description);
     
-    // Store in game state
     game->national_event.is_active = 1;
     game->national_event.rounds_remaining = 15;
     game->national_event.effect_percentage = card.effect_percentage;
@@ -310,27 +302,23 @@ void process_national_event(GameState* game) {
     game->national_event.started_round = game->round_number;
     strcpy(game->national_event.event_name, card.name);
     
-    printf("  ✅ Effect active for 15 rounds.\n");
+    printf("  Effect active for 15 rounds.\n");
 }
 
 void process_inflation(GameState* game) {
     if (game == NULL) return;
     
-    printf("\n📈 INFLATION TRIGGERED! (Every 10 Rounds)\n");
+    printf("\nINFLATION TRIGGERED! (Every 10 Rounds)\n");
     
-    // Select random inflation rate from possible values
     int index = rand() % NUM_INFLATION_RATES;
     int inflation_rate = INFLATION_RATES[index];
     
-    // Store in game state
     game->current_inflation_rate = inflation_rate;
     update_average_rent_for_inflation(inflation_rate);
     
-    // Apply inflation to all properties
     for (int i = 0; i < MAX_PROPERTIES; i++) {
         Property* prop = &property_array[i];
         
-        // Update property purchase price
         if (inflation_rate != 0) {
             prop->purchase_price = (prop->purchase_price * (100 + inflation_rate)) / 100;
             prop->base_rent = (prop->base_rent * (100 + inflation_rate)) / 100;
@@ -344,7 +332,6 @@ void process_inflation(GameState* game) {
         (game->special_rent_inflation_basis_points *
          (100 + inflation_rate)) / 100;
     
-    // Update loan interest rate
     if (inflation_rate != 0) {
         game->current_interest_rate_basis_points =
             (game->current_interest_rate_basis_points *
@@ -353,13 +340,12 @@ void process_inflation(GameState* game) {
             (game->current_interest_rate_basis_points + 50) / 100;
     }
     
-    // Print results
     if (inflation_rate > 0) {
-        printf("  📊 Inflation: +%d%%\n", inflation_rate);
+        printf("  Inflation: +%d%%\n", inflation_rate);
     } else if (inflation_rate < 0) {
-        printf("  📊 Deflation: %d%%\n", inflation_rate);
+        printf("  Deflation: %d%%\n", inflation_rate);
     } else {
-        printf("  📊 No inflation this period.\n");
+        printf("  No inflation this period.\n");
     }
     printf("  Current loan interest rate: %d%%\n", game->current_interest_rate);
     printf("  Insurance premiums and repair costs use the recalculated values.\n");
@@ -368,41 +354,38 @@ void process_inflation(GameState* game) {
 void process_government_regulation(GameState* game) {
     if (game == NULL) return;
     
-    printf("\n🏛️ GOVERNMENT REGULATION TRIGGERED! (Every 20 Rounds)\n");
+    printf("\nGOVERNMENT REGULATION TRIGGERED! (Every 20 Rounds)\n");
     
-    // Select random regulation
     int index = rand() % NUM_REGULATIONS;
     const char* regulation_name = REGULATION_NAMES[index];
     
-    // Store in game state
     game->government_regulation.is_active = 1;
     game->government_regulation.rounds_remaining = 20;
     game->government_regulation.started_round = game->round_number;
     strcpy(game->government_regulation.regulation_name, regulation_name);
     
-    // Apply regulation effects based on type
     switch (index) {
         case 0: { // Increase Property Tax
             game->government_regulation.effect_percentage = 50;  // Income Tax +50%
-            printf("  📜 %s\n", regulation_name);
+            printf("  %s\n", regulation_name);
             printf("     Income Tax increases by 50%%.\n");
             break;
         }
         case 1: { // Reduce Loan Interest
             game->government_regulation.effect_percentage = -2;  // Interest -2%
-            printf("  📜 %s\n", regulation_name);
+            printf("  %s\n", regulation_name);
             printf("     Loan interest decreases by 2%%.\n");
             break;
         }
         case 2: { // Housing Subsidy
             game->government_regulation.effect_percentage = -30;  // Construction -30%
-            printf("  📜 %s\n", regulation_name);
+            printf("  %s\n", regulation_name);
             printf("     House construction costs reduce by 30%%.\n");
             break;
         }
         case 3: { // Luxury Property Tax
             game->government_regulation.effect_percentage = 25;  // Hotels tax 25%
-            printf("  📜 %s\n", regulation_name);
+            printf("  %s\n", regulation_name);
             printf("     Hotels incur annual maintenance tax of 25%%.\n");
 
             // No calendar year is defined, so levy the tax when selected.
@@ -428,25 +411,25 @@ void process_government_regulation(GameState* game) {
         }
         case 4: { // Railway Modernization
             game->government_regulation.effect_percentage = 25;  // Railway rent +25%
-            printf("  📜 %s\n", regulation_name);
+            printf("  %s\n", regulation_name);
             printf("     Railway rents increase 25%%.\n");
             break;
         }
         case 5: { // Electricity Tariff Revision
             game->government_regulation.effect_percentage = 20;  // Utility rent +20%
-            printf("  📜 %s\n", regulation_name);
+            printf("  %s\n", regulation_name);
             printf("     Utility rents increase 20%%.\n");
             break;
         }
         case 6: { // Insurance Regulation
             game->government_regulation.effect_percentage = -15;  // Insurance -15%
-            printf("  📜 %s\n", regulation_name);
+            printf("  %s\n", regulation_name);
             printf("     Insurance premiums decrease 15%%.\n");
             break;
         }
         case 7: { // Anti-Speculation Act
             game->government_regulation.effect_percentage = 3;  // Max 3 undeveloped
-            printf("  📜 %s\n", regulation_name);
+            printf("  %s\n", regulation_name);
             printf("     Players may own at most 3 undeveloped properties.\n");
             printf("     Additional purchases require development within 5 rounds.\n");
             break;
@@ -456,20 +439,19 @@ void process_government_regulation(GameState* game) {
             break;
     }
     
-    printf("  ✅ Effect active for 20 rounds.\n");
+    printf("  Effect active for 20 rounds.\n");
 }
 
 void process_regional_development(GameState* game) {
     if (game == NULL) return;
     
-    printf("\n🏗️ REGIONAL DEVELOPMENT TRIGGERED! (Every 15 Rounds)\n");
+    printf("\nREGIONAL DEVELOPMENT TRIGGERED! (Every 15 Rounds)\n");
     
     RegionalCard card = regional_deck[regional_deck_index];
     int card_index = regional_deck_index;
     const char* region = card.name;
     regional_deck_index = (regional_deck_index + 1) % 12;
     
-    // Store in game state
     game->regional_development.is_active = 1;
     game->regional_development.rounds_remaining = 15;
     game->regional_development.started_round = game->round_number;
@@ -478,17 +460,16 @@ void process_regional_development(GameState* game) {
     strcpy(game->regional_development.event_name, card.name);
     strcpy(game->regional_development.region_name, card.name);
     
-    printf("  📍 %s Development Programme\n", region);
+    printf("  %s Development Programme\n", region);
     printf("  %s\n", card.description);
-    printf("  ✅ Effect active for 15 rounds.\n");
+    printf("  Effect active for 15 rounds.\n");
 }
 
 void process_market_review(GameState* game) {
     if (game == NULL) return;
     
-    printf("\n📊 MARKET REVIEW TRIGGERED! (Every 10 Rounds)\n");
+    printf("\nMARKET REVIEW TRIGGERED! (Every 10 Rounds)\n");
     
-    // Property groups (excluding RAILWAY and UTILITY)
     PropertyGroup groups[] = {
         GROUP_BROWN, GROUP_LIGHT_BLUE, GROUP_PINK, GROUP_ORANGE,
         GROUP_RED, GROUP_YELLOW, GROUP_GREEN, GROUP_DARK_BLUE
@@ -522,7 +503,6 @@ void process_market_review(GameState* game) {
     int boom_index = eligible_indices[boom_choice];
     PropertyGroup boom_group = groups[boom_index];
     
-    // Remove the boom group before selecting the decline group.
     eligible_indices[boom_choice] = eligible_indices[eligible_count - 1];
     eligible_count--;
 
@@ -532,7 +512,6 @@ void process_market_review(GameState* game) {
     game->market_group_last_selected_round[boom_index] = game->round_number;
     game->market_group_last_selected_round[decline_index] = game->round_number;
     
-    // Store boom in game state
     game->market_boom.is_active = 1;
     game->market_boom.rounds_remaining = 10;
     game->market_boom.started_round = game->round_number;
@@ -540,7 +519,6 @@ void process_market_review(GameState* game) {
     game->market_boom.group = boom_group;
     strcpy(game->market_boom.group_name, group_names[boom_index]);
     
-    // Store decline in game state
     game->market_decline.is_active = 1;
     game->market_decline.rounds_remaining = 10;
     game->market_decline.started_round = game->round_number;
@@ -550,17 +528,16 @@ void process_market_review(GameState* game) {
     
     // Do not rewrite base values. Active conditions are applied when needed.
     
-    printf("  📈 BOOM: %s Group (+20%% value, +25%% rent)\n", group_names[boom_index]);
-    printf("  📉 DECLINE: %s Group (-15%% value, -20%% rent)\n", group_names[decline_index]);
-    printf("  ✅ Effects active for 10 rounds.\n");
+    printf("  BOOM: %s Group (+20%% value, +25%% rent)\n", group_names[boom_index]);
+    printf("  DECLINE: %s Group (-15%% value, -20%% rent)\n", group_names[decline_index]);
+    printf("  Effects active for 10 rounds.\n");
 }
 
 void check_disaster(GameState* game) {
     if (game == NULL) return;
     
-    printf("\n🌪️ DISASTER CHECK! (Every 10 Rounds)\n");
+    printf("\nDISASTER CHECK! (Every 10 Rounds)\n");
     
-    // Find all developed properties (owned by players with buildings)
     int developed_properties[MAX_PROPERTIES];
     int num_developed = 0;
     
@@ -570,25 +547,22 @@ void check_disaster(GameState* game) {
         }
     }
     
-    // If no developed properties, skip
     if (num_developed == 0) {
         printf("  No developed properties to damage.\n");
         return;
     }
     
-    // Select random developed property
     int prop_index = developed_properties[rand() % num_developed];
     Property* prop = &property_array[prop_index];
     
-    // Select random disaster type
     int disaster_index = rand() % NUM_DISASTERS;
     const char* disaster = DISASTER_TYPES[disaster_index];
     
-    // Calculate damage: 10-30% of property value
+    // Disaster damage is 10-30% of current property value.
     int property_value = get_property_value(prop);
     int damage = (property_value * (10 + (rand() % 21))) / 100;  // 10-30%
     
-    printf("  🚨 %s strikes %s!\n", disaster, prop->property_name);
+    printf("  %s strikes %s!\n", disaster, prop->property_name);
     printf("     Damage: LKR %d\n", damage);
     
     Player* owner = &game->players[prop->owner_id];
@@ -646,7 +620,6 @@ void process_pending_disaster_repairs(GameState* game) {
 void update_event_durations(GameState* game) {
     if (game == NULL) return;
 
-    // Reduce temporary property closures created by Political Rally.
     for (int i = 0; i < MAX_PROPERTIES; i++) {
         if (property_array[i].event_closed_rounds > 0 &&
             property_array[i].event_closed_started_round != game->round_number) {
@@ -692,15 +665,13 @@ void update_event_durations(GameState* game) {
         game->national_event.started_round != game->round_number) {
         game->national_event.rounds_remaining--;
         
-        // Check for renewal reminder (3 rounds before expiry)
         if (game->national_event.rounds_remaining == 3) {
-            printf("  📢 REMINDER: National Event '%s' expires in 3 rounds!\n",
+            printf("  REMINDER: National Event '%s' expires in 3 rounds!\n",
                    game->national_event.event_name);
         }
         
-        // Check for expiry
         if (game->national_event.rounds_remaining <= 0) {
-            printf("  📢 National Event '%s' has ended.\n",
+            printf("  National Event '%s' has ended.\n",
                    game->national_event.event_name);
             game->national_event.is_active = 0;
             game->national_event.effect_percentage = 0;
@@ -717,12 +688,12 @@ void update_event_durations(GameState* game) {
         game->regional_development.rounds_remaining--;
         
         if (game->regional_development.rounds_remaining == 3) {
-            printf("  📢 REMINDER: Regional Development in %s expires in 3 rounds!\n",
+            printf("  REMINDER: Regional Development in %s expires in 3 rounds!\n",
                    game->regional_development.region_name);
         }
         
         if (game->regional_development.rounds_remaining <= 0) {
-            printf("  📢 Regional Development in %s has ended.\n",
+            printf("  Regional Development in %s has ended.\n",
                    game->regional_development.region_name);
             game->regional_development.is_active = 0;
             game->regional_development.effect_percentage = 0;
@@ -741,12 +712,12 @@ void update_event_durations(GameState* game) {
         game->government_regulation.rounds_remaining--;
         
         if (game->government_regulation.rounds_remaining == 3) {
-            printf("  📢 REMINDER: Government Regulation '%s' expires in 3 rounds!\n",
+            printf("  REMINDER: Government Regulation '%s' expires in 3 rounds!\n",
                    game->government_regulation.regulation_name);
         }
         
         if (game->government_regulation.rounds_remaining <= 0) {
-            printf("  📢 Government Regulation '%s' has ended.\n",
+            printf("  Government Regulation '%s' has ended.\n",
                    game->government_regulation.regulation_name);
             game->government_regulation.is_active = 0;
             game->government_regulation.effect_percentage = 0;
@@ -763,7 +734,7 @@ void update_event_durations(GameState* game) {
         game->market_boom.rounds_remaining--;
         
         if (game->market_boom.rounds_remaining == 0) {
-            printf("  📢 Market Boom for %s Group has ended.\n",
+            printf("  Market Boom for %s Group has ended.\n",
                    game->market_boom.group_name);
             game->market_boom.is_active = 0;
             game->market_boom.effect_percentage = 0;
@@ -780,7 +751,7 @@ void update_event_durations(GameState* game) {
         game->market_decline.rounds_remaining--;
         
         if (game->market_decline.rounds_remaining == 0) {
-            printf("  📢 Market Decline for %s Group has ended.\n",
+            printf("  Market Decline for %s Group has ended.\n",
                    game->market_decline.group_name);
             game->market_decline.is_active = 0;
             game->market_decline.effect_percentage = 0;
@@ -1284,4 +1255,3 @@ int apply_market_auction_modifier(Property* prop, GameState* game, int value) {
 
     return value;
 }
-
