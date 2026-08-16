@@ -77,7 +77,7 @@ int get_min_buildings_in_group(Player* player, PropertyGroup group) {
     if (player == NULL) return -1;
     
     int min_buildings = 999;
-    int selected_property = -1;
+    int found_property = 0;
     
     for (int i = 0; i < MAX_PROPERTIES; i++) {
         if (property_array[i].color_group == group && 
@@ -87,12 +87,13 @@ int get_min_buildings_in_group(Player* player, PropertyGroup group) {
             // Hotel counts as 5 (can't build more)
             if (buildings < min_buildings) {
                 min_buildings = buildings;
-                selected_property = i;
+                found_property = 1;
             }
         }
     }
-    
-    return selected_property;
+
+    if (!found_property) return -1;
+    return min_buildings;
 }
 
 // Print function to display player's financial status
@@ -898,14 +899,14 @@ int can_build_hotel(Player* player, int property_index, GameState* game) {
         return 0;
     }
     
-    // Check even building rule: all properties in group must have 4 houses
+    // Every property must have reached four houses. Properties already
+    // converted to hotels remain legally developed.
     for (int i = 0; i < MAX_PROPERTIES; i++) {
         if (property_array[i].color_group == prop->color_group && 
             property_array[i].owner_id == player->player_id) {
-            if (property_array[i].building_count != 4) {
-                printf("  Even building rule: %s has %d houses, but %s has %d.\n",
-                       prop->property_name, prop->building_count,
-                       property_array[i].property_name,
+            if (property_array[i].building_count < 4) {
+                printf("  Hotel rule: %s is ready, but %s has only %d houses.\n",
+                       prop->property_name, property_array[i].property_name,
                        property_array[i].building_count);
                 return 0;
             }

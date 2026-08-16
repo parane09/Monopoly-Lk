@@ -715,7 +715,9 @@ void resolve_landing(GameState* game, Player* player) {
                 if (should_take_loan(player)) {
                     int amount = get_loan_amount(player);
                     if (amount > max_loan) amount = max_loan;
-                    if (amount > 0) take_loan(player, amount, game);
+                    if (amount > 0 && take_loan(player, amount, game)) {
+                        process_aggressive_development(game, player);
+                    }
                 }
             }
             break;
@@ -935,6 +937,33 @@ void end_of_round_processing(GameState* game) {
     printf("\n=== END OF ROUND %d PROCESSING COMPLETE ===\n", game->round_number);
 }
 
+void process_aggressive_development(GameState* game, Player* player) {
+    if (game == NULL || player == NULL) return;
+    if (player->is_bankrupt || player->strategy != STRATEGY_AGGRESSIVE) return;
+
+    printf("\n  Aggressive Investor development check...\n");
+
+    // Keep building legal houses until cash or the building rules stop us.
+    while (should_build(player)) {
+        int property_index = choose_build_property(player);
+        if (property_index < 0) break;
+
+        if (!build_house(player, property_index, game)) {
+            break;
+        }
+    }
+
+    // After houses are maximized, convert every legally eligible property.
+    while (should_build_hotel(player)) {
+        int property_index = choose_hotel_property(player);
+        if (property_index < 0) break;
+
+        if (!build_hotel(player, property_index, game)) {
+            break;
+        }
+    }
+}
+
 // Helper function to buy property
 void buy_property(Player* player, Property* prop, GameState* game) {
     if (player == NULL || prop == NULL) return;
@@ -955,6 +984,8 @@ void buy_property(Player* player, Property* prop, GameState* game) {
     
     printf("  %s purchased %s for LKR %d.\n", 
            player->player_name, prop->property_name, purchase_price);
+
+    process_aggressive_development(game, player);
 }
 
 // Run an auction according to Rules 6 and LK 19-23.
@@ -1050,5 +1081,7 @@ void start_auction(GameState* game, Property* prop) {
 
     printf("%s wins the auction for LKR %d.\n",
            winner->player_name, current_bid);
+
+    process_aggressive_development(game, winner);
 }
 

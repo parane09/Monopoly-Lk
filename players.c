@@ -544,6 +544,9 @@ int aggressive_choose_build(Player* player) {
                     
                     // Skip properties that already have 4 houses (can't build more)
                     if (property_array[i].building_count >= 4) continue;
+
+                    // Skip properties the player cannot currently afford.
+                    if (player->cash < property_array[i].house_construction_cost) continue;
                     
                     // Find the property with the fewest buildings
                     if (property_array[i].building_count < min_buildings) {
@@ -596,7 +599,9 @@ int aggressive_choose_hotel(Player* player) {
         Property* prop = &property_array[i];
         
         // Check if player owns this property and it has 4 houses
-        if (prop->owner_id == player->player_id && prop->building_count == 4) {
+        if (prop->owner_id == player->player_id &&
+            prop->building_count == 4 &&
+            player->cash >= prop->hotel_construction_cost) {
             return i;  // Return first property with 4 houses
         }
     }
