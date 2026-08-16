@@ -19,6 +19,13 @@ int average_rent = 500;
 static int calculate_roi(Player* player, Property* prop);
 static int get_adjusted_market_value(Player* player, Property* prop);
 static int is_economic_recession_active(void);
+static int get_projected_rent(Player* player, Property* prop);
+static int get_projected_appreciation(Player* player, Property* prop);
+static int get_projected_property_return(Player* player, Property* prop,
+                                         int investment_cost);
+static int is_balanced_portfolio_purchase(Player* player, Property* prop);
+static int get_development_return(Player* player, Property* prop,
+                                  int next_building_count);
 
 void set_player_game_state(GameState* game) {
     strategy_game_state = game;
@@ -1200,8 +1207,17 @@ int risk_taker_should_build(Player* player) {
                     
                     // Can build if less than 4 houses
                     if (property_array[i].building_count < 4) {
-                        // Check if can afford at least one house
-                        if (player->cash >= property_array[i].house_construction_cost) {
+                        Property* prop = &property_array[i];
+                        int cost = prop->house_construction_cost;
+                        if (strategy_game_state != NULL) {
+                            cost = apply_event_construction_modifiers(
+                                prop, cost, strategy_game_state,
+                                player->player_id);
+                        }
+                        int projected_return = get_development_return(
+                            player, prop, prop->building_count + 1);
+
+                        if (player->cash >= cost && projected_return > cost) {
                             return 1;
                         }
                     }
@@ -1349,21 +1365,132 @@ int risk_taker_should_renovate(Player* player, int property_index) {
 
 // Oppurtunistic trader SPECIFIC FUNCTIONS
 
-// Calculate ROI (Return on Investment) for a property
+static int get_projected_rent(Player* player, Property* prop) {
+    if (player == NULL || prop == NULL) return 0;
+
+    int rent = 0;
+
+    if (prop->color_group == GROUP_RAILWAY) {
+        int railway_count = 1;
+        for (int i = 0; i < MAX_PROPERTIES; i++) {
+            if (&property_array[i] != prop &&
+                property_array[i].owner_id == player->player_id &&
+                property_array[i].color_group == GROUP_RAILWAY) {
+                railway_count++;
+            }
+        }
+
+        if (railway_count == 1) rent = 250;
+        else if (railway_count == 2) rent = 500;
+        else if (railway_count == 3) rent = 1000;
+        else rent = 2000;
+    } else if (prop->color_group == GROUP_UTILITY) {
+        int utility_count = 1;
+        for (int i = 0; i < MAX_PROPERTIES; i++) {
+            if (&property_array[i] != prop &&
+                property_array[i].owner_id == player->player_id &&
+                property_array[i].color_group == GROUP_UTILITY) {
+                utility_count++;
+            }
+        }
+
+        // Seven is the average result of two six-sided dice.
+        rent = (utility_count >= 2) ? 10 * 7 : 4 * 7;
+    } else {
+        int multiplier = get_building_multiplier(prop->building_count);
+        rent = prop->base_rent * multiplier;
+
+        if (prop->owner_id == -1 &&
+            would_complete_monopoly(player, prop->color_group)) {
+            rent *= 2;
+        }
+    }
+
+    if (strategy_game_state != NULL) {
+        rent = apply_event_rent_modifiers(
+            prop, strategy_game_state, player->player_id, rent);
+    }
+
+    return rent;
+}
+
+static int get_projected_appreciation(Player* player, Property* prop) {
+    if (player == NULL || prop == NULL) return 0;
+
+    int projected_value = get_adjusted_market_value(player, prop);
+    int investment_value = get_adjusted_purchase_price(player, prop);
+    return projected_value - investment_value;
+}
+
+static int get_projected_property_return(Player* player, Property* prop,
+                                         int investment_cost) {
+    if (player == NULL || prop == NULL || investment_cost <= 0) return 0;
+
+    int appreciation = get_projected_appreciation(player, prop);
+    int rental_return = get_projected_rent(player, prop) * 10;
+    return appreciation + rental_return;
+}
+
+static int is_balanced_portfolio_purchase(Player* player, Property* prop) {
+    if (player == NULL || prop == NULL) return 0;
+
+    int residential_count = 0;
+    int railway_count = 0;
+    int utility_count = 0;
+
+    for (int i = 0; i < MAX_PROPERTIES; i++) {
+        if (property_array[i].owner_id != player->player_id) continue;
+
+        if (property_array[i].color_group == GROUP_RAILWAY) railway_count++;
+        else if (property_array[i].color_group == GROUP_UTILITY) utility_count++;
+        else residential_count++;
+    }
+
+    int smallest_count = residential_count;
+    if (railway_count < smallest_count) smallest_count = railway_count;
+    if (utility_count < smallest_count) smallest_count = utility_count;
+
+    if (prop->color_group == GROUP_RAILWAY) {
+        return railway_count == smallest_count;
+    }
+    if (prop->color_group == GROUP_UTILITY) {
+        return utility_count == smallest_count;
+    }
+    return residential_count == smallest_count;
+}
+
+static int get_development_return(Player* player, Property* prop,
+                                  int next_building_count) {
+    if (player == NULL || prop == NULL) return 0;
+    if (next_building_count < 1 || next_building_count > 5) return 0;
+
+    int current_multiplier = get_building_multiplier(prop->building_count);
+    int next_multiplier = get_building_multiplier(next_building_count);
+    int current_rent = prop->base_rent * current_multiplier;
+    int future_rent = prop->base_rent * next_multiplier;
+
+    if (strategy_game_state != NULL) {
+        current_rent = apply_event_rent_modifiers(
+            prop, strategy_game_state, player->player_id, current_rent);
+        future_rent = apply_event_rent_modifiers(
+            prop, strategy_game_state, player->player_id, future_rent);
+    }
+
+    return (future_rent - current_rent) * 10;
+}
+
+// Return on the acquisition, including ten projected rent collections and
+// appreciation indicated by the currently active events and market state.
 static int calculate_roi(Player* player, Property* prop) {
     if (player == NULL || prop == NULL) return 0;
     if (prop->owner_id != -1) return 0;
-    
+
     int cost = get_adjusted_purchase_price(player, prop);
-    int annual_rent = prop->base_rent * 10;  // Estimate 10 visits per round
-    
-    // If completing a monopoly, rent doubles
-    if (would_complete_monopoly(player, prop->color_group)) {
-        annual_rent *= 2;
-    }
-    
-    if (cost == 0) return 0;
-    return (annual_rent * 100) / cost;
+    if (cost <= 0) return 0;
+
+    int projected_return =
+        get_projected_property_return(player, prop, cost);
+    return (projected_return * 100) / cost;
 }
 
 int opportunistic_should_buy(Player* player, Property* prop) {
@@ -1372,30 +1499,28 @@ int opportunistic_should_buy(Player* player, Property* prop) {
     if (prop->owner_id != -1) return 0;
     if (prop->owner_id == player->player_id) return 0;
     
-    // Opportunistic Trader: Buy if projected appreciation exceeds construction costs
-    // For now, use ROI > 10% as a proxy
-    int roi = calculate_roi(player, prop);
-    
-    // Also check if can afford
     int purchase_price = get_adjusted_purchase_price(player, prop);
     if (player->cash < purchase_price) return 0;
-    
-    // Buy if ROI > 10% (good investment)
-    if (roi > 10) {
-        return 1;
+
+    if (!is_balanced_portfolio_purchase(player, prop)) return 0;
+
+    int construction_cost = prop->house_construction_cost;
+    if (strategy_game_state != NULL && construction_cost > 0) {
+        construction_cost = apply_event_construction_modifiers(
+            prop, construction_cost, strategy_game_state, player->player_id);
     }
-    
-    // Special case: Would complete a monopoly
-    if (would_complete_monopoly(player, prop->color_group)) {
-        return 1;
-    }
-    
-    return 0;
+
+    int appreciation = get_projected_appreciation(player, prop);
+    int projected_return =
+        get_projected_property_return(player, prop, purchase_price);
+
+    return appreciation > construction_cost && projected_return > 0;
 }
 
 int opportunistic_auction_bid(Player* player, Property* prop, int current_bid) {
     if (player == NULL || prop == NULL) return -1;
     if (player->is_bankrupt) return -1;
+    if (!is_balanced_portfolio_purchase(player, prop)) return -1;
     
     // Can't bid if we can't afford current bid
     if (current_bid >= player->cash) return -1;
@@ -1421,6 +1546,12 @@ int opportunistic_auction_bid(Player* player, Property* prop, int current_bid) {
     } else {
         return -1;  // ROI too low, withdraw
     }
+
+    // Prefer a clearly discounted auction purchase. Even a high-return
+    // opportunity cannot be bid beyond 90% of its adjusted market value.
+    int discounted_limit =
+        (get_adjusted_market_value(player, prop) * 90) / 100;
+    if (max_bid > discounted_limit) max_bid = discounted_limit;
     
     // Also consider 50% cash rule (buying property leaves some cash)
     int cash_after = player->cash - current_bid;
@@ -1434,8 +1565,11 @@ int opportunistic_auction_bid(Player* player, Property* prop, int current_bid) {
     
     // Rule-LK 20: increase the current bid by the minimum LKR 250.
     int next_bid = current_bid + 250;
+    int projected_return =
+        get_projected_property_return(player, prop, next_bid);
     
-    if (next_bid <= max_bid && next_bid <= player->cash) {
+    if (next_bid <= max_bid && next_bid <= player->cash &&
+        projected_return > next_bid) {
         return next_bid;
     }
     
@@ -1450,30 +1584,26 @@ int opportunistic_should_loan(Player* player) {
     int max_loan = get_max_loan_amount(player);
     if (max_loan == 0) return 0;
     
-    // Opportunistic Trader: Take loan if projected return exceeds borrowing cost
-    // For now, check if there's any property with ROI > 15%
-    for (int i = 0; i < MAX_PROPERTIES; i++) {
-        Property* prop = &property_array[i];
-        if (prop->owner_id == -1) {
-            int roi = calculate_roi(player, prop);
-            if (roi > 15) {
-                return 1;  // Good investment opportunity
-            }
-        }
+    int loan_amount = (max_loan * 70) / 100;
+    int interest_rate = 8;
+    if (strategy_game_state != NULL) {
+        interest_rate = apply_event_interest_modifiers(
+            strategy_game_state->current_interest_rate,
+            strategy_game_state, player->player_id);
     }
-    
-    // Also check if loan would complete a monopoly
+    int borrowing_cost = (loan_amount * interest_rate) / 100;
+
     for (int i = 0; i < MAX_PROPERTIES; i++) {
         Property* prop = &property_array[i];
-        if (prop->owner_id == -1) {
-            if (would_complete_monopoly(player, prop->color_group)) {
-                int purchase_price =
-                    get_adjusted_purchase_price(player, prop);
-                if (player->cash + max_loan >= purchase_price) {
-                    return 1;
-                }
-            }
-        }
+        if (prop->owner_id != -1) continue;
+        if (!is_balanced_portfolio_purchase(player, prop)) continue;
+
+        int purchase_price = get_adjusted_purchase_price(player, prop);
+        int projected_return =
+            get_projected_property_return(player, prop, purchase_price);
+
+        if (player->cash + loan_amount >= purchase_price &&
+            projected_return > borrowing_cost) return 1;
     }
     
     return 0;
@@ -1558,10 +1688,9 @@ int opportunistic_choose_build(Player* player) {
     if (player == NULL) return -1;
     if (player->is_bankrupt) return -1;
     
-    // Opportunistic Trader uses standard even building rule
-    // But priorities groups that are currently booming (future enhancement)
-    // For now, use default order: DARK_BLUE > GREEN > YELLOW > RED > ORANGE > PINK > LIGHT_BLUE > BROWN
-    
+    int best_property = -1;
+    int best_surplus = 0;
+
     PropertyGroup groups[] = {
         GROUP_DARK_BLUE, GROUP_GREEN, GROUP_YELLOW, GROUP_RED,
         GROUP_ORANGE, GROUP_PINK, GROUP_LIGHT_BLUE, GROUP_BROWN
@@ -1569,30 +1698,39 @@ int opportunistic_choose_build(Player* player) {
     
     for (int g = 0; g < 8; g++) {
         if (has_monopoly(player, groups[g])) {
-            // Find property with fewest buildings
             int min_buildings = 999;
-            int chosen = -1;
-            
+
             for (int i = 0; i < MAX_PROPERTIES; i++) {
                 if (property_array[i].color_group == groups[g] &&
                     property_array[i].owner_id == player->player_id) {
-                    
                     if (property_array[i].building_count >= 4) continue;
-                    
-                    if (property_array[i].building_count < min_buildings) {
+                    if (property_array[i].building_count < min_buildings)
                         min_buildings = property_array[i].building_count;
-                        chosen = i;
-                    }
                 }
             }
-            
-            if (chosen != -1) {
-                return chosen;
+
+            for (int i = 0; i < MAX_PROPERTIES; i++) {
+                Property* prop = &property_array[i];
+                if (prop->color_group != groups[g] ||
+                    prop->owner_id != player->player_id ||
+                    prop->building_count != min_buildings) continue;
+
+                int cost = prop->house_construction_cost;
+                if (strategy_game_state != NULL) {
+                    cost = apply_event_construction_modifiers(
+                        prop, cost, strategy_game_state, player->player_id);
+                }
+                int surplus = get_development_return(
+                    player, prop, prop->building_count + 1) - cost;
+                if (cost <= player->cash && surplus > best_surplus) {
+                    best_surplus = surplus;
+                    best_property = i;
+                }
             }
         }
     }
-    
-    return -1;
+
+    return best_property;
 }
 
 int opportunistic_should_hotel(Player* player) {
@@ -1605,19 +1743,13 @@ int opportunistic_should_hotel(Player* player) {
         Property* prop = &property_array[i];
         
         if (prop->owner_id == player->player_id && prop->building_count == 4) {
-            // Can we afford hotel?
-            if (player->cash >= prop->hotel_construction_cost) {
-                // Calculate ROI on hotel upgrade
-                int current_rent = prop->base_rent * 7;  // 4 houses = 7x
-                int future_rent = prop->base_rent * 10;  // Hotel = 10x
-                int rent_increase = future_rent - current_rent;
-                int cost = prop->hotel_construction_cost;
-                
-                // ROI = rent increase / cost
-                if (rent_increase * 100 / cost > 10) {  // > 10% ROI
-                    return 1;
-                }
+            int cost = prop->hotel_construction_cost;
+            if (strategy_game_state != NULL) {
+                cost = apply_event_construction_modifiers(
+                    prop, cost, strategy_game_state, player->player_id);
             }
+            int projected_return = get_development_return(player, prop, 5);
+            if (player->cash >= cost && projected_return > cost) return 1;
         }
     }
     
@@ -1628,17 +1760,21 @@ int opportunistic_choose_hotel(Player* player) {
     if (player == NULL) return -1;
     if (player->is_bankrupt) return -1;
     
-    // Opportunistic Trader: Choose most valuable property with 4 houses
-    int highest_value = 0;
+    int best_surplus = 0;
     int chosen = -1;
     
     for (int i = 0; i < MAX_PROPERTIES; i++) {
         Property* prop = &property_array[i];
         
         if (prop->owner_id == player->player_id && prop->building_count == 4) {
-            int value = get_property_value(prop);
-            if (value > highest_value) {
-                highest_value = value;
+            int cost = prop->hotel_construction_cost;
+            if (strategy_game_state != NULL) {
+                cost = apply_event_construction_modifiers(
+                    prop, cost, strategy_game_state, player->player_id);
+            }
+            int surplus = get_development_return(player, prop, 5) - cost;
+            if (cost <= player->cash && surplus > best_surplus) {
+                best_surplus = surplus;
                 chosen = i;
             }
         }
@@ -1666,11 +1802,18 @@ int opportunistic_should_insure(Player* player, int property_index) {
         return 0;
     }
     
-    // Check if can afford premium
     int premium = calculate_insurance_premium(prop, INSURANCE_COMPREHENSIVE);
+    if (strategy_game_state != NULL) {
+        premium = apply_event_insurance_modifiers(
+            premium, strategy_game_state, player->player_id);
+    }
     if (premium > player->cash) {
         return 0;
     }
+
+    // Estimate one significant loss as 20% of the development's value.
+    int expected_avoided_loss = property_value / 5;
+    if (expected_avoided_loss <= premium) return 0;
     
     return INSURANCE_COMPREHENSIVE;
 }
@@ -1691,7 +1834,7 @@ int opportunistic_should_renovate(Player* player, int property_index) {
         return 0;
     }
     
-    // Check if can afford renovation
+    // Compare the value restored by renovation with its cost.
     int property_value = get_property_value(prop);
     int renovation_cost = (property_value * 10) / 100;
     
@@ -1699,7 +1842,8 @@ int opportunistic_should_renovate(Player* player, int property_index) {
         return 0;
     }
     
-    return 1;
+    int restored_value = (prop->purchase_price * depreciation) / 100;
+    return restored_value > renovation_cost;
 }
 
 

@@ -372,6 +372,7 @@ void process_government_regulation(GameState* game);
 void buy_property(Player* player, Property* prop, GameState* game);
 void start_auction(GameState* game, Property* prop);
 void process_strategy_development(GameState* game, Player* player);
+void process_opportunistic_renovations(GameState* game);
 
 
 // players.c - AI Strategy Prototypes

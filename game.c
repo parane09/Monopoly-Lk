@@ -859,6 +859,9 @@ void end_of_round_processing(GameState* game) {
             }
         }
     }
+
+    // Check Opportunistic Trader renovations as soon as depreciation updates.
+    process_opportunistic_renovations(game);
     
     // ============================================
     // 5. ROUND-BASED TRIGGERS
@@ -950,14 +953,17 @@ void process_strategy_development(GameState* game, Player* player) {
     if (player->is_bankrupt) return;
     if (player->strategy != STRATEGY_AGGRESSIVE &&
         player->strategy != STRATEGY_CONSERVATIVE &&
-        player->strategy != STRATEGY_RISK_TAKER) return;
+        player->strategy != STRATEGY_RISK_TAKER &&
+        player->strategy != STRATEGY_OPPORTUNISTIC) return;
 
     if (player->strategy == STRATEGY_AGGRESSIVE) {
         printf("\n  Aggressive Investor development check...\n");
     } else if (player->strategy == STRATEGY_CONSERVATIVE) {
         printf("\n  Conservative Banker development check...\n");
-    } else {
+    } else if (player->strategy == STRATEGY_RISK_TAKER) {
         printf("\n  Risk Taker development check...\n");
+    } else {
+        printf("\n  Opportunistic Trader development check...\n");
     }
 
     // Keep building legal houses until cash or the building rules stop us.
@@ -977,6 +983,27 @@ void process_strategy_development(GameState* game, Player* player) {
 
         if (!build_hotel(player, property_index, game)) {
             break;
+        }
+    }
+}
+
+void process_opportunistic_renovations(GameState* game) {
+    if (game == NULL) return;
+
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        Player* player = &game->players[i];
+        if (player->is_bankrupt ||
+            player->strategy != STRATEGY_OPPORTUNISTIC) continue;
+
+        for (int property_index = 0;
+             property_index < MAX_PROPERTIES;
+             property_index++) {
+            if (property_array[property_index].owner_id != player->player_id)
+                continue;
+
+            if (should_renovate(player, property_index)) {
+                renovate_property(player, property_index);
+            }
         }
     }
 }
