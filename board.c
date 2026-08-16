@@ -932,22 +932,19 @@ int move_player(Player* player, int dice_total) {
     int old_position = player->board_position;
     int new_position = (old_position + dice_total) % BOARD_SIZE;
     
-    // Update player position
     player->board_position = new_position;
     
-    // Check if passed GO (wrapped around)
     if (new_position < old_position) {
         player->cash += GO_BONUS;
-        return 1;  // Passed GO
+        return 1;
     }
     
-    // Check if exactly landed on GO (position 0 from old position > 0)
     if (new_position == 0 && old_position > 0) {
         player->cash += GO_BONUS;
-        return 1;  // Landed on GO
+        return 1; 
     }
     
-    return 0;  // Did not pass GO
+    return 0; 
 }
 
 

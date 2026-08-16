@@ -248,17 +248,10 @@ typedef struct {
     
 } GameState;
 
-// ============================================
-// EXTERNAL GLOBAL ARRAYS
-// (Defined in board.c, accessible everywhere)
-// ============================================
-
 extern Square board_array[BOARD_SIZE];
 extern Property property_array[MAX_PROPERTIES];
 
-// ============================================
 // FUNCTION PROTOTYPES
-// ============================================
 
 // Prototypes from game.c
 void init_game(GameState* game);
