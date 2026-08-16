@@ -3,18 +3,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-// ============================================
 // HELPER FUNCTIONS
-// ============================================
 
-// Get current property value including depreciation
-// This is a base value - will be expanded with market effects later
 int get_property_value(Property* prop) {
     if (prop == NULL) return 0;
     
     int value = prop->purchase_price;
     
-    // Apply depreciation reduction (if any)
     if (prop->value_reduction > 0) {
         value = (value * (100 - prop->value_reduction)) / 100;
     }
@@ -27,8 +22,6 @@ int get_property_value(Property* prop) {
     return value;
 }
 
-// Calculate total mortgage value of all unmortgaged, unlocked properties
-// Used for determining maximum loan amount
 int get_total_mortgage_value(Player* player) {
     if (player == NULL) return 0;
     
@@ -40,9 +33,6 @@ int get_total_mortgage_value(Player* player) {
         
         Property* prop = &property_array[prop_idx];
         
-        // Only count properties that are:
-        // 1. Not already mortgaged
-        // 2. Not locked as collateral for an existing loan
         if (!prop->is_mortgaged && !prop->is_loan_locked) {
             total += prop->mortgage_value;
         }
@@ -51,8 +41,6 @@ int get_total_mortgage_value(Player* player) {
     return total;
 }
 
-// Check if a player has a monopoly on a color group
-// This will be used for building decisions
 int has_monopoly(Player* player, PropertyGroup group) {
     if (player == NULL) return 0;
     
@@ -71,8 +59,6 @@ int has_monopoly(Player* player, PropertyGroup group) {
     return (owned_count == total_in_group && total_in_group > 0);
 }
 
-// Find the property with the fewest buildings in a color group
-// Used for even building rule
 int get_min_buildings_in_group(Player* player, PropertyGroup group) {
     if (player == NULL) return -1;
     
@@ -84,7 +70,6 @@ int get_min_buildings_in_group(Player* player, PropertyGroup group) {
             property_array[i].owner_id == player->player_id) {
             
             int buildings = property_array[i].building_count;
-            // Hotel counts as 5 (can't build more)
             if (buildings < min_buildings) {
                 min_buildings = buildings;
                 found_property = 1;
@@ -96,7 +81,6 @@ int get_min_buildings_in_group(Player* player, PropertyGroup group) {
     return min_buildings;
 }
 
-// Print function to display player's financial status
 void print_player_finance(Player* player) {
     if (player == NULL) return;
     
@@ -147,7 +131,6 @@ void declare_bankruptcy(GameState* game, Player* player, const char* reason) {
     int assets_to_auction[MAX_PROPERTIES];
     int asset_count = 0;
 
-    // Record assets before ownership information is cleared.
     for (int i = 0; i < MAX_PROPERTIES; i++) {
         Property* prop = &property_array[i];
         if (prop->owner_id != player->player_id) continue;
@@ -183,14 +166,12 @@ void declare_bankruptcy(GameState* game, Player* player, const char* reason) {
     }
 }
 
-// Calculate maximum loan amount a player can get
 // Maximum = 75% of total mortgage value of unmortgaged, unlocked properties
 int get_max_loan_amount(Player* player) {
     if (player == NULL) return 0;
     
     int total_mortgage_value = get_total_mortgage_value(player);
     
-    // 75% of total mortgage value
     int max_loan = (total_mortgage_value * 75) / 100;
     
     return max_loan;
@@ -216,31 +197,25 @@ int get_max_loan_amount_with_market(Player* player, GameState* game) {
     return (total_mortgage_value * 75) / 100;
 }
 
-// Take a loan - player borrows money with properties as collateral
-// Returns: 1 = success, 0 = failure
 int take_loan(Player* player, int amount, GameState* game) {
     if (player == NULL) return 0;
     
-    // Check if player already has an active loan
     if (player->player_loan.is_active) {
         printf("  %s already has an active loan!\n", player->player_name);
         return 0;
     }
     
-    // Calculate maximum loan amount
     int max_loan = get_max_loan_amount_with_market(player, game);
     if (max_loan == 0) {
         printf("  %s has no eligible collateral for a loan.\n", player->player_name);
         return 0;
     }
     
-    // Check if requested amount is valid
     if (amount <= 0 || amount > max_loan) {
         printf("  Invalid loan amount. Maximum: LKR %d\n", max_loan);
         return 0;
     }
     
-    // Check if player has enough cash? No - loan adds cash, doesn't require it
     
     // Lock only enough eligible collateral to secure the requested amount.
     lock_collateral(player, amount);
@@ -251,7 +226,6 @@ int take_loan(Player* player, int amount, GameState* game) {
         return 0;
     }
     
-    // Create the loan
     player->player_loan.is_active = 1;
     player->player_loan.current_amount = amount;
     player->player_loan.original_amount = amount;
@@ -268,7 +242,6 @@ int take_loan(Player* player, int amount, GameState* game) {
         (game != NULL) ? game->round_number + 1 : -1;
     player->player_loan.collateral_count = locked_count;
     
-    // Add cash to player
     player->cash += amount;
     
     printf("  %s obtained a secured loan of LKR %d.\n", 
@@ -280,44 +253,35 @@ int take_loan(Player* player, int amount, GameState* game) {
     return 1;
 }
 
-// Repay part or all of a loan
-// Returns: 1 = success, 0 = failure
 int repay_loan(Player* player, int amount) {
     if (player == NULL) return 0;
     
-    // Check if loan is active
     if (!player->player_loan.is_active) {
         printf("  %s has no active loan to repay.\n", player->player_name);
         return 0;
     }
     
-    // Check amount
     if (amount <= 0) {
         printf("  Repayment amount must be positive.\n");
         return 0;
     }
     
-    // Check if player has enough cash
     if (amount > player->cash) {
         printf("  Insufficient cash. Available: LKR %d\n", player->cash);
         return 0;
     }
     
-    // Don't repay more than owed
     if (amount > player->player_loan.current_amount) {
         amount = player->player_loan.current_amount;
     }
     
-    // Deduct cash
     player->cash -= amount;
     player->player_loan.current_amount -= amount;
     
     printf("  %s repaid LKR %d. Remaining loan: LKR %d\n", 
            player->player_name, amount, player->player_loan.current_amount);
     
-    // Check if fully repaid
     if (player->player_loan.current_amount == 0) {
-        // Unlock all collateral
         unlock_collateral(player);
         player->player_loan.is_active = 0;
         printf("  Loan fully repaid! Collateral unlocked.\n");
@@ -326,8 +290,6 @@ int repay_loan(Player* player, int amount) {
     return 1;
 }
 
-// Apply compound interest to a player's loan
-// Called at the end of each round
 void apply_loan_interest(Player* player, int current_round, GameState* game) {
     if (player == NULL) return;
     if (!player->player_loan.is_active) return;
@@ -337,7 +299,6 @@ void apply_loan_interest(Player* player, int current_round, GameState* game) {
     int interest = (player->player_loan.current_amount * player->player_loan.interest_rate) / 100;
     player->player_loan.current_amount += interest;
     
-    // Decrease duration
     player->player_loan.rounds_remaining--;
     
     printf("  %s loan interest: LKR %d added. New balance: LKR %d (Rounds left: %d)\n",
@@ -345,13 +306,11 @@ void apply_loan_interest(Player* player, int current_round, GameState* game) {
            player->player_loan.current_amount,
            player->player_loan.rounds_remaining);
     
-    // Check for default
     if (player->player_loan.rounds_remaining <= 0) {
         process_loan_default(player, game);
     }
 }
 
-// Process loan default - foreclosure
 void process_loan_default(Player* player, GameState* game) {
     if (player == NULL) return;
     if (!player->player_loan.is_active) return;
@@ -363,7 +322,6 @@ void process_loan_default(Player* player, GameState* game) {
     int foreclosed_properties[MAX_COLLATERAL];
     int foreclosed_count = 0;
     
-    // Transfer all collateral properties to the bank
     for (int i = 0; i < player->player_loan.collateral_count; i++) {
         int prop_idx = player->player_loan.collateral_properties[i];
         if (prop_idx < 0 || prop_idx >= MAX_PROPERTIES) continue;
@@ -372,10 +330,8 @@ void process_loan_default(Player* player, GameState* game) {
 
         foreclosed_properties[foreclosed_count++] = prop_idx;
         
-        // Remove from player's owned properties
         for (int j = 0; j < player->owned_property_count; j++) {
             if (player->owned_property_indices[j] == prop_idx) {
-                // Shift remaining properties down
                 for (int k = j; k < player->owned_property_count - 1; k++) {
                     player->owned_property_indices[k] = player->owned_property_indices[k + 1];
                 }
@@ -389,7 +345,6 @@ void process_loan_default(Player* player, GameState* game) {
         printf("    Property %s transferred to Bank.\n", prop->property_name);
     }
     
-    // Clear the loan
     player->player_loan.is_active = 0;
     player->player_loan.current_amount = 0;
     player->player_loan.original_amount = 0;
@@ -407,7 +362,6 @@ void process_loan_default(Player* player, GameState* game) {
                               player->player_id);
     }
     
-    // Check if player has any remaining assets
     if (player->owned_property_count == 0 && player->cash <= 0) {
         declare_bankruptcy(game, player,
                            "no assets remain after loan foreclosure");
@@ -444,7 +398,6 @@ void lock_collateral(Player* player, int loan_amount) {
     player->player_loan.collateral_count = locked;
 }
 
-// Unlock all collateral properties (loan fully repaid)
 void unlock_collateral(Player* player) {
     if (player == NULL) return;
     
@@ -462,8 +415,6 @@ void unlock_collateral(Player* player) {
 // INSURANCE SYSTEM
 // ============================================
 
-// Calculate insurance premium based on policy type and property value
-// Returns: Premium amount in LKR
 int calculate_insurance_premium(Property* prop, int policy_type) {
     if (prop == NULL) return 0;
     
@@ -472,17 +423,14 @@ int calculate_insurance_premium(Property* prop, int policy_type) {
     
     switch (policy_type) {
         case INSURANCE_BASIC:
-            // 5% of property value
             premium = (property_value * 5) / 100;
             break;
             
         case INSURANCE_COMPREHENSIVE:
-            // 10% of property value
             premium = (property_value * 10) / 100;
             break;
             
         case INSURANCE_BUSINESS:
-            // 15% of property value (only for hotels)
             if (prop->building_count == 5) {  // Has hotel
                 premium = (property_value * 15) / 100;
             } else {
@@ -499,8 +447,6 @@ int calculate_insurance_premium(Property* prop, int policy_type) {
     return premium;
 }
 
-// Buy insurance for a property
-// Returns: 1 = success, 0 = failure
 int buy_insurance(Player* player, int property_index, int policy_type, GameState* game) {
     if (player == NULL) return 0;
     if (property_index < 0 || property_index >= MAX_PROPERTIES) return 0;
@@ -513,20 +459,17 @@ int buy_insurance(Player* player, int property_index, int policy_type, GameState
         return 0;
     }
     
-    // Check if property belongs to player
     if (prop->owner_id != player->player_id) {
         printf("  %s does not own %s!\n", player->player_name, prop->property_name);
         return 0;
     }
     
-    // Check if already has insurance
     if (prop->insurance_policy != INSURANCE_NONE) {
         printf("  %s already has insurance on %s.\n", 
                player->player_name, prop->property_name);
         return 0;
     }
     
-    // Calculate premium
     int premium = calculate_insurance_premium(prop, policy_type);
     premium = apply_event_insurance_modifiers(
         premium, game, player->player_id);
@@ -535,23 +478,19 @@ int buy_insurance(Player* player, int property_index, int policy_type, GameState
         return 0;
     }
     
-    // Check if player can afford premium
     if (premium > player->cash) {
         printf("  Insufficient funds! Premium: LKR %d, Available: LKR %d\n", 
                premium, player->cash);
         return 0;
     }
     
-    // Deduct premium
     player->cash -= premium;
     
-    // Set insurance on property
     prop->insurance_policy = policy_type;
     prop->insurance_rounds_remaining = INSURANCE_DURATION;
     prop->insurance_started_round =
         (game != NULL) ? game->round_number + 1 : -1;
     
-    // Print policy name
     const char* policy_names[] = {
         "None",
         "Basic Property Insurance",
@@ -575,10 +514,8 @@ void process_insurance_expiry(Property* prop, int current_round) {
     if (prop->insurance_policy == INSURANCE_NONE) return;
     if (prop->insurance_started_round == current_round) return;
     
-    // Decrement remaining rounds
     prop->insurance_rounds_remaining--;
     
-    // Check for renewal reminder (3 rounds before expiry)
     if (prop->insurance_rounds_remaining == 3) {
         const char* policy_names[] = {
             "None",
@@ -591,7 +528,6 @@ void process_insurance_expiry(Property* prop, int current_round) {
                prop->property_name);
     }
     
-    // Check for expiry
     if (prop->insurance_rounds_remaining <= 0) {
         const char* policy_names[] = {
             "None",
@@ -608,8 +544,6 @@ void process_insurance_expiry(Property* prop, int current_round) {
     }
 }
 
-// Process a disaster claim - returns compensation amount
-// Returns: Compensation in LKR, or 0 if no insurance
 int process_disaster_claim(Property* prop, int damage_cost,
                            const char* disaster_type, GameState* game) {
     if (prop == NULL) return 0;
@@ -634,7 +568,6 @@ int process_disaster_claim(Property* prop, int damage_cost,
                 printf("  Basic Insurance does not cover %s.\n", disaster_type);
                 return 0;
             }
-            // 80% of repair cost
             compensation = (damage_cost * 80) / 100;
             printf("  Basic Insurance covers 80%% of LKR %d = LKR %d\n",
                    damage_cost, compensation);
@@ -648,7 +581,6 @@ int process_disaster_claim(Property* prop, int damage_cost,
                        disaster_type);
                 return 0;
             }
-            // 100% of repair cost
             compensation = damage_cost;
             printf("  Comprehensive Insurance covers 100%% = LKR %d\n", compensation);
             break;
@@ -664,7 +596,6 @@ int process_disaster_claim(Property* prop, int damage_cost,
                 printf("  Business Interruption covers repair + 5 rounds hotel rent = LKR %d\n",
                        compensation);
             } else {
-                // If no hotel, treat as Comprehensive
                 compensation = damage_cost;
                 printf("  No hotel on property. Treated as Comprehensive: LKR %d\n", compensation);
             }
@@ -674,8 +605,6 @@ int process_disaster_claim(Property* prop, int damage_cost,
             return 0;
     }
     /*
-    // Reduce insurance duration (disaster consumes some coverage)
-    // This is a common house rule - not in spec but makes sense
     prop->insurance_rounds_remaining -= 2;
     if (prop->insurance_rounds_remaining < 0) {
         prop->insurance_rounds_remaining = 0;
@@ -689,19 +618,15 @@ int process_disaster_claim(Property* prop, int damage_cost,
     return compensation;
 }
 
-// Check if a property has active insurance
 int has_active_insurance(Property* prop) {
     if (prop == NULL) return 0;
     return (prop->insurance_policy != INSURANCE_NONE);
 }
 
-// Get insurance renewal reminder string
-// Returns: 1 if reminder should be shown, 0 otherwise
 int get_insurance_reminder(Property* prop) {
     if (prop == NULL) return 0;
     if (prop->insurance_policy == INSURANCE_NONE) return 0;
     
-    // Show reminder at 3 rounds remaining
     if (prop->insurance_rounds_remaining == 3) {
         return 1;
     }
@@ -709,7 +634,6 @@ int get_insurance_reminder(Property* prop) {
     return 0;
 }
 
-// Get insurance policy name as string
 const char* get_insurance_policy_name(int policy_type) {
     static const char* names[] = {
         "None",
@@ -725,7 +649,6 @@ const char* get_insurance_policy_name(int policy_type) {
     return names[policy_type];
 }
 
-// Print all insurance policies for a player
 void print_player_insurance(Player* player) {
     if (player == NULL) return;
     
@@ -756,8 +679,6 @@ void print_player_insurance(Player* player) {
 // BUILDING SYSTEM
 // ============================================
 
-// Check if a player can build a house on a property
-// Returns: 1 = can build, 0 = cannot build
 int can_build_house(Player* player, int property_index, GameState* game) {
     if (player == NULL) return 0;
     if (property_index < 0 || property_index >= MAX_PROPERTIES) return 0;
@@ -775,31 +696,26 @@ int can_build_house(Player* player, int property_index, GameState* game) {
         return 0;
     }
     
-    // Check if player owns the property
     if (prop->owner_id != player->player_id) {
         printf("  %s does not own %s!\n", player->player_name, prop->property_name);
         return 0;
     }
     
-    // Check if property already has a hotel (building_count == 5)
     if (prop->building_count == 5) {
         printf("  %s already has a hotel. Cannot build more.\n", prop->property_name);
         return 0;
     }
     
-    // Check if property already has 4 houses
     if (prop->building_count == 4) {
         printf("  %s has 4 houses. Upgrade to hotel instead.\n", prop->property_name);
         return 0;
     }
     
-    // Check if player has a monopoly on this property's color group
     if (!has_monopoly(player, prop->color_group)) {
         printf("  %s does not have a monopoly on this color group.\n", player->player_name);
         return 0;
     }
     
-    // Check if player has enough cash
     int cost = apply_event_construction_modifiers(
         prop, prop->house_construction_cost, game, player->player_id);
     if (player->cash < cost) {
@@ -808,17 +724,13 @@ int can_build_house(Player* player, int property_index, GameState* game) {
         return 0;
     }
     
-    // Check even building rule: cannot exceed other properties in group by more than 1
     int min_buildings = get_min_buildings_in_group(player, prop->color_group);
     if (min_buildings == -1) {
-        // No other properties in group? Shouldn't happen if has_monopoly is true
         return 1;  // Can build if it's the only property in group
     }
     
-    // Get current building count of this property
     int current_buildings = prop->building_count;
     
-    // Get the minimum building count in the group
     int min_count = 999;
     for (int i = 0; i < MAX_PROPERTIES; i++) {
         if (property_array[i].color_group == prop->color_group && 
@@ -829,7 +741,6 @@ int can_build_house(Player* player, int property_index, GameState* game) {
         }
     }
     
-    // Cannot build if this property has more buildings than the minimum
     if (current_buildings > min_count) {
         printf("  Even building rule: %s has %d houses, but another property has only %d.\n",
                prop->property_name, current_buildings, min_count);
@@ -839,13 +750,10 @@ int can_build_house(Player* player, int property_index, GameState* game) {
     return 1;
 }
 
-// Build a house on a property
-// Returns: 1 = success, 0 = failure
 int build_house(Player* player, int property_index, GameState* game) {
     if (player == NULL) return 0;
     if (property_index < 0 || property_index >= MAX_PROPERTIES) return 0;
     
-    // Check if can build
     if (!can_build_house(player, property_index, game)) {
         return 0;
     }
@@ -854,13 +762,10 @@ int build_house(Player* player, int property_index, GameState* game) {
     int cost = apply_event_construction_modifiers(
         prop, prop->house_construction_cost, game, player->player_id);
     
-    // Deduct cost
     player->cash -= cost;
     
-    // Add house
     prop->building_count++;
     
-    // Reset condition to 100%
     prop->condition_percentage = 100;
     prop->rounds_since_maintenance = 0;
     
@@ -870,8 +775,6 @@ int build_house(Player* player, int property_index, GameState* game) {
     return 1;
 }
 
-// Check if a player can build a hotel on a property
-// Returns: 1 = can build, 0 = cannot build
 int can_build_hotel(Player* player, int property_index, GameState* game) {
     if (player == NULL) return 0;
     if (property_index < 0 || property_index >= MAX_PROPERTIES) return 0;
@@ -889,32 +792,27 @@ int can_build_hotel(Player* player, int property_index, GameState* game) {
         return 0;
     }
     
-    // Check if player owns the property
     if (prop->owner_id != player->player_id) {
         printf("  %s does not own %s!\n", player->player_name, prop->property_name);
         return 0;
     }
     
-    // Check if property already has a hotel
     if (prop->building_count == 5) {
         printf("  %s already has a hotel.\n", prop->property_name);
         return 0;
     }
     
-    // Check if property has 4 houses
     if (prop->building_count != 4) {
         printf("  %s needs 4 houses before building a hotel. Currently: %d\n",
                prop->property_name, prop->building_count);
         return 0;
     }
     
-    // Check if player has a monopoly on this property's color group
     if (!has_monopoly(player, prop->color_group)) {
         printf("  %s does not have a monopoly on this color group.\n", player->player_name);
         return 0;
     }
     
-    // Check if player has enough cash
     int cost = apply_event_construction_modifiers(
         prop, prop->hotel_construction_cost, game, player->player_id);
     if (player->cash < cost) {
@@ -940,13 +838,10 @@ int can_build_hotel(Player* player, int property_index, GameState* game) {
     return 1;
 }
 
-// Build a hotel on a property (upgrade from 4 houses)
-// Returns: 1 = success, 0 = failure
 int build_hotel(Player* player, int property_index, GameState* game) {
     if (player == NULL) return 0;
     if (property_index < 0 || property_index >= MAX_PROPERTIES) return 0;
     
-    // Check if can build hotel
     if (!can_build_hotel(player, property_index, game)) {
         return 0;
     }
@@ -955,13 +850,10 @@ int build_hotel(Player* player, int property_index, GameState* game) {
     int cost = apply_event_construction_modifiers(
         prop, prop->hotel_construction_cost, game, player->player_id);
     
-    // Deduct cost
     player->cash -= cost;
     
-    // Upgrade to hotel (building_count = 5)
     prop->building_count = 5;
     
-    // Reset condition to 100%
     prop->condition_percentage = 100;
     prop->rounds_since_maintenance = 0;
     
@@ -971,27 +863,22 @@ int build_hotel(Player* player, int property_index, GameState* game) {
     return 1;
 }
 
-// Calculate rent for a property including building multipliers
-// Returns: Rent amount in LKR
 int calculate_rent_with_buildings(Property* prop) {
     if (prop == NULL) return 0;
     
     int base_rent = prop->base_rent;
     int buildings = prop->building_count;
     
-    // If property is mortgaged, no rent collected
     if (prop->is_mortgaged) {
         printf("  %s is mortgaged. No rent collected.\n", prop->property_name);
         return 0;
     }
     
-    // If building is closed (condition < 25%), no rent
     if (prop->condition_percentage < 25 && buildings > 0) {
         printf("  %s building is closed. No rent collected.\n", prop->property_name);
         return 0;
     }
     
-    // Apply rent multiplier based on buildings (from assignment)
     int multiplier = 1;
     
     switch (buildings) {
@@ -1018,7 +905,6 @@ int calculate_rent_with_buildings(Property* prop) {
             break;
     }
     
-    // Apply condition multiplier (from Table 3)
     int condition_multiplier = get_rent_multiplier(prop);
     if (condition_multiplier == 0) {
         return 0;  // Building closed
@@ -1032,7 +918,6 @@ int calculate_rent_with_buildings(Property* prop) {
         rent = (rent * 75) / 100;
     }
     
-    // If no buildings, condition doesn't apply (use 100%)
     if (buildings == 0) {
         rent = base_rent;
     }
@@ -1040,13 +925,11 @@ int calculate_rent_with_buildings(Property* prop) {
     return rent;
 }
 
-// Get rent multiplier based on building condition (Table 3)
 int get_rent_multiplier(Property* prop) {
     if (prop == NULL) return 0;
     
     int condition = prop->condition_percentage;
     
-    // If no buildings, condition doesn't matter
     if (prop->building_count == 0) {
         return 100;
     }
@@ -1067,7 +950,6 @@ int get_rent_multiplier(Property* prop) {
     return 100;  // Default
 }
 
-// Get current building multiplier based on building count
 int get_building_multiplier(int building_count) {
     switch (building_count) {
         case 0:  return 1;
@@ -1080,7 +962,6 @@ int get_building_multiplier(int building_count) {
     }
 }
 
-// Print building status for a property
 void print_building_status(Property* prop) {
     if (prop == NULL) return;
     
@@ -1096,7 +977,6 @@ void print_building_status(Property* prop) {
     }
 }
 
-// Print all buildings for a player
 void print_player_buildings(Player* player) {
     if (player == NULL) return;
     
@@ -1127,7 +1007,6 @@ int get_building_cost(Property* prop, GameState* game) {
         cost = prop->house_construction_cost;
     }
     
-    // Apply event modifiers
     if (game != NULL) {
         int player_id = prop->owner_id;
         cost = apply_event_construction_modifiers(prop, cost, game, player_id);
@@ -1140,59 +1019,45 @@ int get_building_cost(Property* prop, GameState* game) {
 // BUILDING CONDITION SYSTEM
 // ============================================
 
-// Update building condition - called at end of each round
-// Decreases condition by 2% per round for buildings
 void update_building_condition(Property* prop) {
     if (prop == NULL) return;
     
-    // Only applies to properties with buildings
     if (prop->building_count == 0) return;
     
-    // Decrease condition by 2% each round
     prop->condition_percentage -= 2;
     
-    // Cap at 0 (minimum)
     if (prop->condition_percentage < 0) {
         prop->condition_percentage = 0;
     }
     
-    // Track rounds since maintenance
     prop->rounds_since_maintenance++;
     
-    // Check if condition dropped below 25% (building closed)
     if (prop->condition_percentage < 25) {
         printf("  WARNING: %s building is CLOSED! (Condition: %d%%)\n",
                prop->property_name, prop->condition_percentage);
     }
     
-    // Check for structural damage (20+ consecutive rounds without maintenance)
     if (prop->rounds_since_maintenance > 20 && !prop->has_structural_damage) {
         process_structural_damage(prop);
     }
 }
 
-// Perform maintenance on a property's building
-// Restores condition to 100%
-// Returns: 1 = success, 0 = failure
 int perform_maintenance(Player* player, int property_index) {
     if (player == NULL) return 0;
     if (property_index < 0 || property_index >= MAX_PROPERTIES) return 0;
     
     Property* prop = &property_array[property_index];
     
-    // Check if player owns the property
     if (prop->owner_id != player->player_id) {
         printf("  %s does not own %s!\n", player->player_name, prop->property_name);
         return 0;
     }
     
-    // Check if property has buildings
     if (prop->building_count == 0) {
         printf("  %s has no buildings to maintain.\n", prop->property_name);
         return 0;
     }
     
-    // Check if condition is already 100%
     if (prop->condition_percentage == 100) {
         printf("  %s is already in perfect condition.\n", prop->property_name);
         return 0;
@@ -1208,22 +1073,17 @@ int perform_maintenance(Player* player, int property_index) {
         return 0;
     }
     
-    // Check if player has enough cash
     if (player->cash < cost) {
         printf("  Insufficient funds! Maintenance cost: LKR %d, Available: LKR %d\n",
                cost, player->cash);
         return 0;
     }
     
-    // Deduct cost
     player->cash -= cost;
     
-    // Restore condition to 100%
     prop->condition_percentage = 100;
     prop->rounds_since_maintenance = 0;
     
-    // If had structural damage, remove it (renovation required separately)
-    // Maintenance alone doesn't fix structural damage
     
     printf("  %s performed maintenance on %s. (Cost: LKR %d)\n",
            player->player_name, prop->property_name, cost);
@@ -1232,8 +1092,6 @@ int perform_maintenance(Player* player, int property_index) {
     return 1;
 }
 
-// Get maintenance cost for a property
-// Returns: Cost in LKR
 int get_maintenance_cost(Property* prop) {
     if (prop == NULL) return 0;
     if (prop->building_count == 0) return 0;
@@ -1242,11 +1100,9 @@ int get_maintenance_cost(Property* prop) {
     int percentage;
     
     if (prop->building_count == 5) {
-        // Hotel: 8% of hotel construction cost
         construction_cost = prop->hotel_construction_cost;
         percentage = 8;
     } else {
-        // House: 5% of house construction cost
         construction_cost = prop->house_construction_cost * prop->building_count;
         percentage = 5;
     }
@@ -1261,16 +1117,13 @@ int get_maintenance_cost(Property* prop) {
     return cost;
 }
 
-// Process structural damage on a property
-// Occurs when maintenance is ignored for more than 20 consecutive rounds
 void process_structural_damage(Property* prop) {
     if (prop == NULL) return;
     if (prop->has_structural_damage) return;
     
-    printf("\n  ⚠️ STRUCTURAL DAMAGE on %s! ⚠️\n", prop->property_name);
+    printf("\n  STRUCTURAL DAMAGE on %s!\n", prop->property_name);
     printf("  Maintenance ignored for over 20 rounds.\n");
     
-    // Mark as structurally damaged
     prop->has_structural_damage = 1;
     
     printf("  Effects:\n");
@@ -1280,7 +1133,6 @@ void process_structural_damage(Property* prop) {
     printf("  Renovation required to restore property.\n");
 }
 
-// Check if a building is closed (condition < 25%)
 int is_building_closed(Property* prop) {
     if (prop == NULL) return 1;  // NULL considered closed
     if (prop->event_closed_rounds > 0) return 1; // Closed by Political Rally
@@ -1290,7 +1142,6 @@ int is_building_closed(Property* prop) {
     return (prop->condition_percentage < 25);
 }
 
-// Check if a building needs maintenance (condition < 50%)
 int needs_maintenance(Property* prop) {
     if (prop == NULL) return 0;
     if (prop->building_count == 0) return 0;
@@ -1298,7 +1149,6 @@ int needs_maintenance(Property* prop) {
     return (prop->condition_percentage < 50);
 }
 
-// Get condition status as string
 const char* get_condition_status(Property* prop) {
     if (prop == NULL) return "Unknown";
     if (prop->building_count == 0) return "No Building";
@@ -1312,7 +1162,6 @@ const char* get_condition_status(Property* prop) {
     else return "CLOSED";
 }
 
-// Print condition of all buildings owned by a player
 void print_player_conditions(Player* player) {
     if (player == NULL) return;
     
@@ -1353,57 +1202,42 @@ void print_player_conditions(Player* player) {
 // DEPRECIATION SYSTEM
 // ============================================
 
-// Update property age - called at end of each round
-// Increments age for all owned properties
 void update_property_age(Property* prop) {
     if (prop == NULL) return;
     
-    // Only applies to owned properties
     if (prop->owner_id == -1) return;
     
-    // Increment age by 1 each round
     prop->property_age++;
 }
 
-// Calculate depreciation for a property
 // Properties older than 50 rounds lose 1% every 5 rounds (max 30%)
-// Returns: Current depreciation percentage (0-30)
 int calculate_depreciation(Property* prop) {
     if (prop == NULL) return 0;
     if (prop->owner_id == -1) return 0;
     
     int age = prop->property_age;
     
-    // No depreciation until age > 50
     if (age <= PROPERTY_AGE_THRESHOLD) {
         return 0;
     }
     
-    // Calculate rounds over threshold
     int over_threshold = age - PROPERTY_AGE_THRESHOLD;
     
-    // 1% depreciation every 5 rounds
     int depreciation = over_threshold / 5;
     
-    // Cap at 30%
     if (depreciation > 30) {
         depreciation = 30;
     }
     
-    // Store in property struct
     prop->value_reduction = depreciation;
     
     return depreciation;
 }
 
-// Get current property value after depreciation
-// This is an enhanced version of the helper function
-// Returns: Current value in LKR
 int get_depreciated_value(Property* prop) {
     return get_property_value(prop);
 }
 
-// Check if property needs renovation (age > 50 or structural damage)
 int needs_renovation(Property* prop) {
     if (prop == NULL) return 0;
     if (prop->owner_id == -1) return 0;
@@ -1414,23 +1248,19 @@ int needs_renovation(Property* prop) {
     return 0;
 }
 
-// Renovate property - resets age and fixes structural damage.
 // Age/depreciation renovation costs 10% of current market value (Rule-LK 17).
 // Structural building renovation costs 25% of replacement value (Rule-LK 29).
-// Returns: 1 = success, 0 = failure
 int renovate_property(Player* player, int property_index) {
     if (player == NULL) return 0;
     if (property_index < 0 || property_index >= MAX_PROPERTIES) return 0;
     
     Property* prop = &property_array[property_index];
     
-    // Check if player owns the property
     if (prop->owner_id != player->player_id) {
         printf("  %s does not own %s!\n", player->player_name, prop->property_name);
         return 0;
     }
     
-    // Check if property needs renovation
     if (!prop->has_structural_damage && prop->property_age <= PROPERTY_AGE_THRESHOLD) {
         printf("  %s does not need renovation. Age: %d, Threshold: %d\n",
                prop->property_name, prop->property_age, PROPERTY_AGE_THRESHOLD);
@@ -1450,17 +1280,14 @@ int renovate_property(Player* player, int property_index) {
         renovation_cost = (get_property_value(prop) * 10) / 100;
     }
     
-    // Check if player has enough cash
     if (player->cash < renovation_cost) {
         printf("  Insufficient funds! Renovation cost: LKR %d, Available: LKR %d\n",
                renovation_cost, player->cash);
         return 0;
     }
     
-    // Deduct cost
     player->cash -= renovation_cost;
     
-    // Restore property
     prop->has_structural_damage = 0;
     prop->property_age = 0;
     prop->value_reduction = 0;
@@ -1474,7 +1301,6 @@ int renovate_property(Player* player, int property_index) {
     return 1;
 }
 
-// Current value of all property, building, railway, and utility assets.
 int calculate_total_property_value(Player* player, GameState* game) {
     if (player == NULL || player->is_bankrupt) return 0;
 
@@ -1524,7 +1350,6 @@ int calculate_net_worth(Player* player, GameState* game) {
     return net_worth;
 }
 
-// Print property depreciation status
 void print_property_depreciation(Player* player) {
     if (player == NULL) return;
     
@@ -1551,10 +1376,10 @@ void print_property_depreciation(Player* player) {
                current_value, prop->purchase_price);
         
         if (prop->has_structural_damage) {
-            printf("    ⚠️ STRUCTURAL DAMAGE - Needs renovation!\n");
+            printf("    STRUCTURAL DAMAGE - Needs renovation!\n");
         }
         if (prop->property_age > PROPERTY_AGE_THRESHOLD + 20) {
-            printf("    ⚠️ Property is significantly aged - consider renovation.\n");
+            printf("    Property is significantly aged - consider renovation.\n");
         }
         
         has_properties = 1;
