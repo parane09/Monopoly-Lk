@@ -178,7 +178,7 @@ void run_game(GameState* game) {
     game->round_number = get_round(game);
     printf("\n========== Round %d ==========\n", game->round_number);
 
-    while (game->round_number <= 500 && !game->is_game_over) {
+    while (game->round_number <= MAX_ROUNDS && !game->is_game_over) {
         for (int i = 0; i < MAX_PLAYERS; i++) {
             int player_idx = (game->starting_player_index + i) % MAX_PLAYERS;
             Player* player = &game->players[player_idx];
