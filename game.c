@@ -473,6 +473,10 @@ void process_turn(GameState* game, Player* player){
     printf("    Cash: LKR %d\n", player->cash);
 
     resolve_landing(game, player);
+
+    // Construction is a normal turn step. Check it after the landing action
+    // so purchases, rent, GO income, loans and events from this turn are known.
+    process_strategy_development(game, player);
 }
 
 void process_beginning_turn_maintenance(Player* player) {
@@ -745,9 +749,7 @@ void resolve_landing(GameState* game, Player* player) {
                 if (should_take_loan(player)) {
                     int amount = get_loan_amount(player);
                     if (amount > max_loan) amount = max_loan;
-                    if (amount > 0 && take_loan(player, amount, game)) {
-                        process_strategy_development(game, player);
-                    }
+                    if (amount > 0) take_loan(player, amount, game);
                 }
             }
             break;
@@ -1034,6 +1036,7 @@ void process_opportunistic_renovations(GameState* game) {
 // Helper function to buy property
 void buy_property(Player* player, Property* prop, GameState* game) {
     if (player == NULL || prop == NULL) return;
+    (void)game;
 
     int purchase_price = get_adjusted_purchase_price(player, prop);
 
@@ -1049,7 +1052,6 @@ void buy_property(Player* player, Property* prop, GameState* game) {
     printf("  %s purchased %s for LKR %d.\n", 
            player->player_name, prop->property_name, purchase_price);
 
-    process_strategy_development(game, player);
 }
 
 // Shared auction controller for ordinary Bank, bankruptcy and foreclosure
@@ -1153,7 +1155,6 @@ static void run_auction(GameState* game, Property* prop,
     printf("%s wins the auction for LKR %d.\n",
            winner->player_name, current_bid);
 
-    process_strategy_development(game, winner);
 }
 
 void start_auction(GameState* game, Property* prop) {
