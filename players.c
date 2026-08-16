@@ -11,12 +11,25 @@
 // and market changes are visible immediately rather than copied and outdated.
 static GameState* strategy_game_state = NULL;
 
+// Estimated cost of one future rent payment. Inflation compounds this value
+// in the same way that it compounds actual rental values.
+int average_rent = 500;
+
 // Helper functions
 static int calculate_roi(Player* player, Property* prop);
 static int get_adjusted_market_value(Player* player, Property* prop);
 
 void set_player_game_state(GameState* game) {
     strategy_game_state = game;
+    average_rent = 500;
+}
+
+void update_average_rent_for_inflation(int inflation_rate) {
+    average_rent = (average_rent * (100 + inflation_rate)) / 100;
+
+    if (average_rent < 1) {
+        average_rent = 1;
+    }
 }
 
 int get_adjusted_purchase_price(Player* player, Property* prop) {
@@ -316,15 +329,18 @@ int aggressive_should_buy(Player* player, Property* prop) {
         return 0;
     }
 
-    // HIGH PRIORITY: Premium properties (Dark Blue - Nuwara Eliya, Galle Face)
-    if (prop->color_group == GROUP_DARK_BLUE || would_complete_monopoly(player, prop->color_group)) {
+    // A purchase is allowed only when one estimated future rent remains.
+    if (player->cash < purchase_price + average_rent) {
+        return 0;
+    }
+
+    // Premium and monopoly-completing properties remain high priorities, but
+    // they no longer bypass the future-rent reserve.
+    if (prop->color_group == GROUP_DARK_BLUE ||
+        would_complete_monopoly(player, prop->color_group)) {
         return 1;
     }
 
-    // Can we afford purchase AND still have at least LKR 500 left for rent?
-    if (player->cash < purchase_price + 500) {
-        return 0;
-    }
     return 1;
 }
 
@@ -372,8 +388,9 @@ int aggressive_should_loan(Player* player) {
                 // Can we afford the property with loan + cash?
                 int purchase_price =
                     get_adjusted_purchase_price(player, prop);
-                if (player->cash < purchase_price &&
-                    player->cash + max_loan >= purchase_price) {
+                int required_cash = purchase_price + average_rent;
+                if (player->cash < required_cash &&
+                    player->cash + max_loan >= required_cash) {
                     return 1;
                 }
             }
@@ -442,7 +459,7 @@ int aggressive_loan_amount(Player* player) {
         if (prop->owner_id == -1 && is_developable_group &&
             would_complete_monopoly(player, prop->color_group)) {
             int purchase_price = get_adjusted_purchase_price(player, prop);
-            int shortfall = purchase_price - player->cash;
+            int shortfall = purchase_price + average_rent - player->cash;
 
             if (shortfall > 0 && shortfall <= max_loan &&
                 (best_shortfall == 0 || shortfall < best_shortfall)) {

@@ -324,6 +324,7 @@ void process_inflation(GameState* game) {
     
     // Store in game state
     game->current_inflation_rate = inflation_rate;
+    update_average_rent_for_inflation(inflation_rate);
     
     // Apply inflation to all properties
     for (int i = 0; i < MAX_PROPERTIES; i++) {
