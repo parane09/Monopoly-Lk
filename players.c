@@ -18,6 +18,7 @@ int average_rent = 500;
 // Helper functions
 static int calculate_roi(Player* player, Property* prop);
 static int get_adjusted_market_value(Player* player, Property* prop);
+static int is_economic_recession_active(void);
 
 void set_player_game_state(GameState* game) {
     strategy_game_state = game;
@@ -55,6 +56,14 @@ static int get_adjusted_market_value(Player* player, Property* prop) {
         prop, strategy_game_state, player->player_id, value);
     value = apply_market_value_modifier(prop, strategy_game_state, value);
     return value;
+}
+
+static int is_economic_recession_active(void) {
+    if (strategy_game_state == NULL) return 0;
+
+    return strategy_game_state->national_event.is_active &&
+           strcmp(strategy_game_state->national_event.event_name,
+                  "Economic Recession") == 0;
 }
 
 // ============================================
@@ -740,23 +749,29 @@ int conservative_should_buy(Player* player, Property* prop) {
     // Check if player somehow already owns this property
     if (prop->owner_id == player->player_id) return 0;
 
-    int purchase_price = get_adjusted_purchase_price(player, prop);
+    // Conservative bankers avoid new investments during a recession.
+    if (is_economic_recession_active()) return 0;
 
-        // PREFERENCE: Railways and Utilities (predictable income)
-    if (prop->color_group == GROUP_RAILWAY || prop->color_group == GROUP_UTILITY) {
-        if(player->cash > purchase_price){
-            return 1;
-        }  // High priority
-    }
+    int purchase_price = get_adjusted_purchase_price(player, prop);
     
     // Conservative Banker Rule:
-    // After purchase, at least 50% of current cash must remain
+    // Every purchase must leave at least 50% of current cash. To express the
+    // railway/utility preference when only one landed property is available,
+    // ordinary properties use a larger 60% reserve.
     int cash_before = player->cash;
     int cash_after = cash_before - purchase_price;
+    int minimum_reserve_percentage = 60;
+
+    if (prop->color_group == GROUP_RAILWAY ||
+        prop->color_group == GROUP_UTILITY) {
+        minimum_reserve_percentage = 50;
+    }
     
-    // Need at least 50% of cash to remain
-    if (cash_after < cash_before / 2) {
-        return 0;  // Too expensive - would leave less than 50% cash
+    int minimum_reserve =
+        (cash_before * minimum_reserve_percentage) / 100;
+
+    if (cash_after < minimum_reserve) {
+        return 0;
     }
 
     return 1;
@@ -766,6 +781,9 @@ int conservative_auction_bid(Player* player, Property* prop, int current_bid) {
     // Guard clauses - validate input
     if (player == NULL || prop == NULL) return -1;
     if (player->is_bankrupt) return -1;
+
+    // Auctions are investments too, so do not bid during a recession.
+    if (is_economic_recession_active()) return -1;
     
     // Can't bid if we can't afford the current bid
     if (current_bid >= player->cash) return -1;
@@ -876,6 +894,9 @@ int conservative_should_build(Player* player) {
     // Guard clauses - validate input
     if (player == NULL) return 0;
     if (player->is_bankrupt) return 0;
+
+    // Do not make new development investments during a recession.
+    if (is_economic_recession_active()) return 0;
     
     
     // Conservative Banker Rule 2:
@@ -965,6 +986,9 @@ int conservative_should_hotel(Player* player) {
     // Guard clauses - validate input
     if (player == NULL) return 0;
     if (player->is_bankrupt) return 0;
+
+    // Do not make new development investments during a recession.
+    if (is_economic_recession_active()) return 0;
     
     // Conservative Banker Rule 1:
     // NO hotels if there are active loans

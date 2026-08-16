@@ -723,7 +723,7 @@ void resolve_landing(GameState* game, Player* player) {
                     int amount = get_loan_amount(player);
                     if (amount > max_loan) amount = max_loan;
                     if (amount > 0 && take_loan(player, amount, game)) {
-                        process_aggressive_development(game, player);
+                        process_strategy_development(game, player);
                     }
                 }
             }
@@ -944,11 +944,17 @@ void end_of_round_processing(GameState* game) {
     printf("\n=== END OF ROUND %d PROCESSING COMPLETE ===\n", game->round_number);
 }
 
-void process_aggressive_development(GameState* game, Player* player) {
+void process_strategy_development(GameState* game, Player* player) {
     if (game == NULL || player == NULL) return;
-    if (player->is_bankrupt || player->strategy != STRATEGY_AGGRESSIVE) return;
+    if (player->is_bankrupt) return;
+    if (player->strategy != STRATEGY_AGGRESSIVE &&
+        player->strategy != STRATEGY_CONSERVATIVE) return;
 
-    printf("\n  Aggressive Investor development check...\n");
+    if (player->strategy == STRATEGY_AGGRESSIVE) {
+        printf("\n  Aggressive Investor development check...\n");
+    } else {
+        printf("\n  Conservative Banker development check...\n");
+    }
 
     // Keep building legal houses until cash or the building rules stop us.
     while (should_build(player)) {
@@ -989,7 +995,7 @@ void buy_property(Player* player, Property* prop, GameState* game) {
     printf("  %s purchased %s for LKR %d.\n", 
            player->player_name, prop->property_name, purchase_price);
 
-    process_aggressive_development(game, player);
+    process_strategy_development(game, player);
 }
 
 // Run an auction according to Rules 6 and LK 19-23.
@@ -1086,6 +1092,6 @@ void start_auction(GameState* game, Property* prop) {
     printf("%s wins the auction for LKR %d.\n",
            winner->player_name, current_bid);
 
-    process_aggressive_development(game, winner);
+    process_strategy_development(game, winner);
 }
 
