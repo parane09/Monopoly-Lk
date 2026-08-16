@@ -3,16 +3,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-// ============================================
-// FORWARD DECLARATIONS
-// ============================================
 
-// Live game state used by strategy calculations. This is a pointer so event
-// and market changes are visible immediately rather than copied and outdated.
 static GameState* strategy_game_state = NULL;
 
-// Estimated cost of one future rent payment. Inflation compounds this value
-// in the same way that it compounds actual rental values.
+
 int average_rent = 500;
 
 // Helper functions
@@ -21,11 +15,9 @@ static int get_adjusted_market_value(Player* player, Property* prop);
 static int is_economic_recession_active(void);
 static int get_projected_rent(Player* player, Property* prop);
 static int get_projected_appreciation(Player* player, Property* prop);
-static int get_projected_property_return(Player* player, Property* prop,
-                                         int investment_cost);
+static int get_projected_property_return(Player* player, Property* prop,int investment_cost);
 static int is_balanced_portfolio_purchase(Player* player, Property* prop);
-static int get_development_return(Player* player, Property* prop,
-                                  int next_building_count);
+static int get_development_return(Player* player, Property* prop,int next_building_count);
 
 void set_player_game_state(GameState* game) {
     strategy_game_state = game;
@@ -73,17 +65,8 @@ static int is_economic_recession_active(void) {
                   "Economic Recession") == 0;
 }
 
-// ============================================
-// INTERNAL HELPER FUNCTIONS
-// ============================================
 
-// ============================================
 // STRATEGY DISPATCHER
-// ============================================
-
-// ============================================
-// STRATEGY DISPATCHER
-// ============================================
 
 int should_buy_property(Player* player, Property* prop) {
     if (player == NULL || prop == NULL) return 0;
@@ -390,7 +373,6 @@ int opportunistic_should_maintain(Player* player, int property_index) {
     return projected_extra_rent > cost;
 }
 
-// Add this to the helpers section at the top of players.c
 static int would_complete_monopoly(Player* player, PropertyGroup group) {
     if (player == NULL) return 0;
     
@@ -414,11 +396,11 @@ static int would_complete_monopoly(Player* player, PropertyGroup group) {
 // AGGRESSIVE INVESTOR SPECIFIC FUNCTIONS
 
 int aggressive_should_buy(Player* player, Property* prop) {
-    // Guard clauses - validate input
+    //validate input
     if (player == NULL || prop == NULL) return 0;
     if (player->is_bankrupt) return 0;
     
-    // Check if property is unowned (AI should only be called for unowned properties)
+    // Check if property is unowned
     if (prop->owner_id != -1) return 0;
 
     int purchase_price = get_adjusted_purchase_price(player, prop);
@@ -427,17 +409,17 @@ int aggressive_should_buy(Player* player, Property* prop) {
         return 0;
     }
 
+    if (prop->color_group == GROUP_DARK_BLUE ||
+        would_complete_monopoly(player, prop->color_group)) {
+        return 1;
+    }
+
     // A purchase is allowed only when one estimated future rent remains.
     if (player->cash < purchase_price + average_rent) {
         return 0;
     }
 
-    // Premium and monopoly-completing properties remain high priorities, but
-    // they no longer bypass the future-rent reserve.
-    if (prop->color_group == GROUP_DARK_BLUE ||
-        would_complete_monopoly(player, prop->color_group)) {
-        return 1;
-    }
+
 
     return 1;
 }
@@ -447,19 +429,15 @@ int aggressive_auction_bid(Player* player, Property* prop, int current_bid) {
     if (player == NULL || prop == NULL) return -1;
     if (player->is_bankrupt) return -1;
     
-    // Check if player can afford the current bid (minimum to participate)
     if (current_bid >= player->cash) return -1;
     
-    // Calculate maximum bid: 120% of property purchase price
     int estimated_value = get_adjusted_market_value(player, prop);
     int max_bid = (estimated_value * 120) / 100;
     
-    // Rule-LK 20: increase the current bid by the minimum LKR 250.
     int next_bid = current_bid + 250;
-    
-    // Check if next bid exceeds maximum allowed or player's cash
+
     if (next_bid <= max_bid && next_bid <= player->cash) {
-        return next_bid;  // Bid this amount
+        return next_bid;  
     }
     
     // If cannot bid, withdraw
