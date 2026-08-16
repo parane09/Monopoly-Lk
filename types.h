@@ -308,9 +308,10 @@ int get_max_loan_amount(Player* player);
 int get_max_loan_amount_with_market(Player* player, GameState* game);
 int take_loan(Player* player, int amount, GameState* game);
 int repay_loan(Player* player, int amount);
-void apply_loan_interest(Player* player, int current_round);
-void process_loan_default(Player* player);
-void declare_bankruptcy(Player* player, const char* reason);
+void apply_loan_interest(Player* player, int current_round, GameState* game);
+void process_loan_default(Player* player, GameState* game);
+void declare_bankruptcy(GameState* game, Player* player, const char* reason);
+void prepare_property_for_bank_auction(Property* prop);
 void lock_collateral(Player* player, int loan_amount);
 void unlock_collateral(Player* player);
 
@@ -371,6 +372,8 @@ void process_regional_development(GameState* game);
 void process_government_regulation(GameState* game);
 void buy_property(Player* player, Property* prop, GameState* game);
 void start_auction(GameState* game, Property* prop);
+void start_special_auction(GameState* game, Property* prop,
+                           const char* reason, int excluded_player_id);
 void process_strategy_development(GameState* game, Player* player);
 void process_opportunistic_renovations(GameState* game);
 void process_beginning_turn_maintenance(Player* player);

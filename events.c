@@ -416,7 +416,7 @@ void process_government_regulation(GameState* game) {
                 int tax = (developed_value * 25) / 100;
 
                 if (owner->cash < tax) {
-                    declare_bankruptcy(owner,
+                    declare_bankruptcy(game, owner,
                         "unable to pay the Luxury Property Tax");
                 } else {
                     owner->cash -= tax;

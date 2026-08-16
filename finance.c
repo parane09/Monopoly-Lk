@@ -120,28 +120,45 @@ void print_player_finance(Player* player) {
 // LOAN SYSTEM
 // ============================================
 
-// Mark a player as bankrupt. Payments or asset transfers to a creditor must be
-// completed by the caller before declaring bankruptcy.
-void declare_bankruptcy(Player* player, const char* reason) {
+void prepare_property_for_bank_auction(Property* prop) {
+    if (prop == NULL) return;
+
+    prop->owner_id = -1;
+    prop->is_mortgaged = 0;
+    prop->is_loan_locked = 0;
+    prop->building_count = 0;
+    prop->condition_percentage = 100;
+    prop->rounds_since_maintenance = 0;
+    prop->has_structural_damage = 0;
+    prop->has_disaster_damage = 0;
+    prop->pending_repair_cost = 0;
+    prop->event_closed_rounds = 0;
+    prop->insurance_policy = INSURANCE_NONE;
+    prop->insurance_rounds_remaining = 0;
+    prop->insurance_started_round = -1;
+    prop->property_age = 0;
+    prop->value_reduction = 0;
+}
+
+// Mark a player as bankrupt and auction every asset returned to the Bank.
+void declare_bankruptcy(GameState* game, Player* player, const char* reason) {
     if (player == NULL || player->is_bankrupt) return;
 
-    // Return every remaining asset to the bank so an eliminated player cannot
-    // continue collecting rent.
+    int assets_to_auction[MAX_PROPERTIES];
+    int asset_count = 0;
+
+    // Record assets before ownership information is cleared.
     for (int i = 0; i < MAX_PROPERTIES; i++) {
         Property* prop = &property_array[i];
         if (prop->owner_id != player->player_id) continue;
 
-        prop->owner_id = -1;
-        prop->is_mortgaged = 0;
-        prop->is_loan_locked = 0;
-        prop->building_count = 0;
-        prop->insurance_policy = INSURANCE_NONE;
-        prop->insurance_rounds_remaining = 0;
-        prop->insurance_started_round = -1;
-        prop->has_disaster_damage = 0;
-        prop->pending_repair_cost = 0;
+        assets_to_auction[asset_count++] = i;
+        prepare_property_for_bank_auction(prop);
     }
 
+    for (int i = 0; i < MAX_PROPERTIES; i++) {
+        player->owned_property_indices[i] = -1;
+    }
     player->owned_property_count = 0;
     player->player_loan.is_active = 0;
     player->player_loan.current_amount = 0;
@@ -157,6 +174,12 @@ void declare_bankruptcy(Player* player, const char* reason) {
         printf("  %s is BANKRUPT: %s.\n", player->player_name, reason);
     } else {
         printf("  %s is BANKRUPT!\n", player->player_name);
+    }
+
+    for (int i = 0; i < asset_count; i++) {
+        Property* prop = &property_array[assets_to_auction[i]];
+        start_special_auction(game, prop, "Bankruptcy",
+                              player->player_id);
     }
 }
 
@@ -305,7 +328,7 @@ int repay_loan(Player* player, int amount) {
 
 // Apply compound interest to a player's loan
 // Called at the end of each round
-void apply_loan_interest(Player* player, int current_round) {
+void apply_loan_interest(Player* player, int current_round, GameState* game) {
     if (player == NULL) return;
     if (!player->player_loan.is_active) return;
     if (player->player_loan.started_round == current_round) return;
@@ -324,18 +347,21 @@ void apply_loan_interest(Player* player, int current_round) {
     
     // Check for default
     if (player->player_loan.rounds_remaining <= 0) {
-        process_loan_default(player);
+        process_loan_default(player, game);
     }
 }
 
 // Process loan default - foreclosure
-void process_loan_default(Player* player) {
+void process_loan_default(Player* player, GameState* game) {
     if (player == NULL) return;
     if (!player->player_loan.is_active) return;
     
     printf("\n LOAN DEFAULT: %s has failed to repay the loan! \n", 
            player->player_name);
     printf("  Foreclosure initiated...\n");
+
+    int foreclosed_properties[MAX_COLLATERAL];
+    int foreclosed_count = 0;
     
     // Transfer all collateral properties to the bank
     for (int i = 0; i < player->player_loan.collateral_count; i++) {
@@ -343,20 +369,8 @@ void process_loan_default(Player* player) {
         if (prop_idx < 0 || prop_idx >= MAX_PROPERTIES) continue;
         
         Property* prop = &property_array[prop_idx];
-        
-        // Demolish buildings
-        if (prop->building_count > 0) {
-            printf("    Demolishing buildings on %s\n", prop->property_name);
-            prop->building_count = 0;
-            prop->condition_percentage = 100;
-        }
-        
-        // Cancel insurance
-        if (prop->insurance_policy != INSURANCE_NONE) {
-            printf("    Cancelling insurance on %s\n", prop->property_name);
-            prop->insurance_policy = INSURANCE_NONE;
-            prop->insurance_rounds_remaining = 0;
-        }
+
+        foreclosed_properties[foreclosed_count++] = prop_idx;
         
         // Remove from player's owned properties
         for (int j = 0; j < player->owned_property_count; j++) {
@@ -370,9 +384,7 @@ void process_loan_default(Player* player) {
             }
         }
         
-        // Transfer to bank (owner_id = -1)
-        prop->owner_id = -1;
-        prop->is_loan_locked = 0;
+        prepare_property_for_bank_auction(prop);
         
         printf("    Property %s transferred to Bank.\n", prop->property_name);
     }
@@ -380,13 +392,25 @@ void process_loan_default(Player* player) {
     // Clear the loan
     player->player_loan.is_active = 0;
     player->player_loan.current_amount = 0;
+    player->player_loan.original_amount = 0;
+    player->player_loan.rounds_remaining = 0;
     player->player_loan.collateral_count = 0;
+    for (int i = 0; i < MAX_COLLATERAL; i++) {
+        player->player_loan.collateral_properties[i] = -1;
+    }
     
     printf("  Outstanding debt cleared.\n");
+
+    for (int i = 0; i < foreclosed_count; i++) {
+        Property* prop = &property_array[foreclosed_properties[i]];
+        start_special_auction(game, prop, "Foreclosure",
+                              player->player_id);
+    }
     
     // Check if player has any remaining assets
     if (player->owned_property_count == 0 && player->cash <= 0) {
-        declare_bankruptcy(player, "no assets remain after loan foreclosure");
+        declare_bankruptcy(game, player,
+                           "no assets remain after loan foreclosure");
     } else {
         printf("  %s continues with remaining assets.\n", player->player_name);
         print_player_finance(player);

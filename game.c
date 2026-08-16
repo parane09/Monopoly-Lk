@@ -570,7 +570,8 @@ void resolve_landing(GameState* game, Player* player) {
                        player->player_name, amount_paid, owner->player_name);
 
                 if (amount_paid < rent) {
-                    declare_bankruptcy(player, "unable to pay the full property rent");
+                    declare_bankruptcy(game, player,
+                                       "unable to pay the full property rent");
                 }
             }
             break;
@@ -633,7 +634,8 @@ void resolve_landing(GameState* game, Player* player) {
                     player->cash = 0;
                     printf("  %s pays LKR %d to %s.\n", 
                            player->player_name, amount_paid, owner->player_name);
-                    declare_bankruptcy(player, "unable to pay the full railway rent");
+                    declare_bankruptcy(game, player,
+                                       "unable to pay the full railway rent");
                 } else {
                     player->cash -= rent;
                     owner->cash += rent;
@@ -701,7 +703,8 @@ void resolve_landing(GameState* game, Player* player) {
                     player->cash = 0;
                     printf("  %s pays LKR %d to %s.\n", 
                            player->player_name, amount_paid, owner->player_name);
-                    declare_bankruptcy(player, "unable to pay the full utility rent");
+                    declare_bankruptcy(game, player,
+                                       "unable to pay the full utility rent");
                 } else {
                     player->cash -= rent;
                     owner->cash += rent;
@@ -777,7 +780,7 @@ void resolve_landing(GameState* game, Player* player) {
                 printf("  %s paid LKR %d income tax.\n",
                        player->player_name, income_tax);
             } else {
-                declare_bankruptcy(player, "unable to pay income tax");
+                declare_bankruptcy(game, player, "unable to pay income tax");
             }
             break;
             
@@ -831,7 +834,7 @@ void end_of_round_processing(GameState* game) {
     for (int i = 0; i < MAX_PLAYERS; i++) {
         Player* player = &game->players[i];
         if (!player->is_bankrupt && player->player_loan.is_active) {
-            apply_loan_interest(player, game->round_number);
+            apply_loan_interest(player, game->round_number, game);
         }
     }
     
@@ -945,7 +948,8 @@ void end_of_round_processing(GameState* game) {
                 int has_income = 0;
                 // TODO: Check railways, utilities, event income
                 if (!has_income) {
-                    declare_bankruptcy(player, "no cash, property, or income remains");
+                    declare_bankruptcy(game, player,
+                                       "no cash, property, or income remains");
                 }
             }
         }
@@ -1048,8 +1052,10 @@ void buy_property(Player* player, Property* prop, GameState* game) {
     process_strategy_development(game, player);
 }
 
-// Run an auction according to Rules 6 and LK 19-23.
-void start_auction(GameState* game, Property* prop) {
+// Shared auction controller for ordinary Bank, bankruptcy and foreclosure
+// auctions. A special auction may exclude the former owner.
+static void run_auction(GameState* game, Property* prop,
+                        const char* reason, int excluded_player_id) {
     if (game == NULL || prop == NULL) return;
     if (prop->owner_id != -1) {
         printf("  Auction cancelled: %s is already owned.\n",
@@ -1067,13 +1073,18 @@ void start_auction(GameState* game, Property* prop) {
     int current_bid = current_value / 2;
     current_bid = apply_market_auction_modifier(prop, game, current_bid);
 
-    printf("\nAuction Started.\n");
+    if (reason != NULL) {
+        printf("\n%s Auction Started.\n", reason);
+    } else {
+        printf("\nAuction Started.\n");
+    }
     printf("Property :\n%s\n", prop->property_name);
     printf("Opening Bid :\nLKR %d.\n", current_bid);
 
     // Rule-LK 19: every solvent player enters the auction.
     for (int i = 0; i < MAX_PLAYERS; i++) {
-        if (!game->players[i].is_bankrupt &&
+        if (i != excluded_player_id &&
+            !game->players[i].is_bankrupt &&
             can_purchase_under_regulation(&game->players[i], game)) {
             active[i] = 1;
             active_count++;
@@ -1143,5 +1154,14 @@ void start_auction(GameState* game, Property* prop) {
            winner->player_name, current_bid);
 
     process_strategy_development(game, winner);
+}
+
+void start_auction(GameState* game, Property* prop) {
+    run_auction(game, prop, NULL, -1);
+}
+
+void start_special_auction(GameState* game, Property* prop,
+                           const char* reason, int excluded_player_id) {
+    run_auction(game, prop, reason, excluded_player_id);
 }
 
