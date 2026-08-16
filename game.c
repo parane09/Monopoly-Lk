@@ -4,17 +4,6 @@
 #include <string.h>
 #include <time.h>
 
-// ============================================
-// FUNCTION PROTOTYPES (Internal to game.c)
-// ============================================
-
-// Forward declarations for functions we'll implement later
-// These are just to keep the compiler happy for now
-
-// ============================================
-// GAME INITIALIZATION
-// ============================================
-
 
 void init_game(GameState* game) {
     set_player_game_state(game);
@@ -79,7 +68,6 @@ void init_game(GameState* game) {
     game->market_decline.started_round = -1;
     strcpy(game->market_decline.group_name, "None");
 
-    // Standard colour groups have not been selected before the game starts.
     for (int i = 0; i < 8; i++) {
         game->market_group_last_selected_round[i] = -30;
     }

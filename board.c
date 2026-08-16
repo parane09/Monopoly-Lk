@@ -3,19 +3,11 @@
 #include <string.h>
 #include <stdlib.h>
 
-// ============================================
-// GLOBAL ARRAY DEFINITIONS
-// ============================================
 
-// Define the board array (40 squares)
 Square board_array[BOARD_SIZE];
-
-// Define the properties array (28 properties)
 Property property_array[MAX_PROPERTIES];
 
-// ============================================
 // BOARD INITIALIZATION
-// ============================================
 
 void init_board_data() {
     int prop_index = 0;
@@ -921,9 +913,7 @@ void init_board_data() {
     
 }
 
-// ============================================
 // DICE ROLLING FUNCTION
-// ============================================
 
 DiceRoll roll_dice(void) {
     DiceRoll dice_roll;
@@ -936,9 +926,7 @@ DiceRoll roll_dice(void) {
     return dice_roll;
 }
 
-// ============================================
 // PLAYER MOVEMENT FUNCTION
-// ============================================
 
 int move_player(Player* player, int dice_total) {
     int old_position = player->board_position;
@@ -962,11 +950,10 @@ int move_player(Player* player, int dice_total) {
     return 0;  // Did not pass GO
 }
 
-// ============================================
-// HELPER FUNCTIONS
-// ============================================
 
-// Get square at a specific position
+
+// HELPER FUNCTIONS
+
 Square* get_square(int position) {
     if (position >= 0 && position < BOARD_SIZE) {
         return &board_array[position];
@@ -974,7 +961,6 @@ Square* get_square(int position) {
     return NULL;
 }
 
-// Get property by its index
 Property* get_property(int property_index) {
     if (property_index >= 0 && property_index < MAX_PROPERTIES) {
         return &property_array[property_index];
@@ -982,7 +968,6 @@ Property* get_property(int property_index) {
     return NULL;
 }
 
-// Get property at a specific board position
 Property* get_property_at_position(int position) {
     Square* square = get_square(position);
     if (square == NULL) {
@@ -996,7 +981,6 @@ Property* get_property_at_position(int position) {
     return NULL;  // Not a property square
 }
 
-// Check if a square is a property
 int is_property_square(int position) {
     Square* square = get_square(position);
     if (square == NULL) {
@@ -1005,7 +989,6 @@ int is_property_square(int position) {
     return (square->property_index >= 0);
 }
 
-// Get square type at a position
 SquareType get_square_type(int position) {
     Square* square = get_square(position);
     if (square == NULL) {
@@ -1014,7 +997,6 @@ SquareType get_square_type(int position) {
     return square->square_type;
 }
 
-// Get the number of properties a player owns in a group
 int count_properties_in_group(Player* player, PropertyGroup group) {
     int count = 0;
     for (int i = 0; i < MAX_PROPERTIES; i++) {
