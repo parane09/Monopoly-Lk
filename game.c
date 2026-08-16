@@ -137,9 +137,7 @@ void init_game(GameState* game) {
     printf("Game initialized successfully.\n");
 }
 
-// ============================================
 // GAME START PRINTING
-// ============================================
 
 void print_game_start(GameState* game) {
     printf("MONOPOLY-LK Simulation\n");
@@ -161,8 +159,6 @@ void print_game_start(GameState* game) {
 
     printf("%s will begin the game\n",game->players[game->starting_player_index].player_name);
 
-    // After the highest roller starts, play proceeds clockwise through the
-    // fixed player array as demonstrated in the assignment brief.
     printf("\nTurn order:\n");
     for (int turn_position = 0; turn_position < MAX_PLAYERS; turn_position++) {
         int player_index = (game->starting_player_index + turn_position) % MAX_PLAYERS;
@@ -171,9 +167,7 @@ void print_game_start(GameState* game) {
     printf("\n");
 }
 
-// ============================================
-// MAIN GAME LOOP (STUB VERSION)
-// ============================================
+// MAIN GAME LOOP
 
 void run_game(GameState* game) {
     if (game == NULL) return;
@@ -286,11 +280,9 @@ void run_game(GameState* game) {
 }
 
 
-// ============================================
-// HELPER FUNCTIONS (Will be expanded later)
-// ============================================
+// HELPER FUNCTIONS
 
-// Function to get player by ID
+
 Player* get_player_by_id(GameState* game, int player_id) {
     if (player_id >= 0 && player_id < MAX_PLAYERS) {
         return &game->players[player_id];
@@ -298,8 +290,7 @@ Player* get_player_by_id(GameState* game, int player_id) {
     return NULL;
 }
  
-// A game round is one more than the fewest GO passes among solvent players.
-// Jailed players remain included because they have not passed GO while jailed.
+
 int get_round(const GameState* game) {
     int minimum_round = 0;
     int found_eligible_player = 0;
@@ -320,7 +311,7 @@ int get_round(const GameState* game) {
     return found_eligible_player ? minimum_round + 1 : game->round_number;
 }
 
-// Function to check if game is over
+
 int check_game_over(GameState* game) {
     int solvent_count = 0;
     int last_solvent = -1;
@@ -343,9 +334,6 @@ int check_game_over(GameState* game) {
     return 0;
 }
 
-// Select the solvent player with the highest assignment-defined net worth.
-// The assignment does not define ties, so cash and then player ID are used to
-// produce a deterministic result.
 Player* determine_winner(GameState* game) {
     if (game == NULL) return NULL;
 
@@ -372,7 +360,6 @@ Player* determine_winner(GameState* game) {
     return winner;
 }
 
-// End-of-game output format from the assignment specification.
 void print_winner_details(const Player* winner, GameState* game) {
     printf("\n=============================================\n");
     printf("                 GAME OVER\n");
@@ -383,8 +370,7 @@ void print_winner_details(const Player* winner, GameState* game) {
         return;
     }
 
-    int total_property_value =
-        calculate_total_property_value((Player*)winner, game);
+    int total_property_value = calculate_total_property_value((Player*)winner, game);
     int net_worth = calculate_net_worth((Player*)winner, game);
 
     printf("Winner\n  %s\n", winner->player_name);
@@ -484,9 +470,7 @@ void process_beginning_turn_maintenance(Player* player) {
 }
 
 
-// ============================================
-// RESOLVE LANDING - Handle square effects
-// ============================================
+// RESOLVE LANDING 
 
 void resolve_landing(GameState* game, Player* player) {
     if (player == NULL) return;
@@ -501,15 +485,12 @@ void resolve_landing(GameState* game, Player* player) {
     
     printf("  Landed on: %s\n", square->square_name);
     
-    // Handle based on square type
     switch (square->square_type) {
         
-        // ============================================
+
         // CASE: START (GO)
-        // ============================================
         case SQUARE_START:
             // GO bonus is already handled in move_player()
-            // Nothing else to do
             break;
             
         // ============================================
@@ -607,7 +588,7 @@ void resolve_landing(GameState* game, Player* player) {
                     }
                 }
                 
-                // Railway rent based on number owned (Table 2)
+                // Railway rent based on number owned
                 int rent = 0;
                 switch (railway_count) {
                     case 1: rent = 250; break;
@@ -807,10 +788,7 @@ void resolve_landing(GameState* game, Player* player) {
     }
 }
 
-// ============================================
 // END OF ROUND PROCESSING
-// Called after all 4 players have completed their turns
-// ============================================
 
 void end_of_round_processing(GameState* game) {
     if (game == NULL) return;
@@ -839,7 +817,6 @@ void end_of_round_processing(GameState* game) {
         }
     }
 
-    // Repair previously damaged buildings as soon as their owners can pay.
     process_pending_disaster_repairs(game);
     
     // ============================================
@@ -875,9 +852,7 @@ void end_of_round_processing(GameState* game) {
     // Check Opportunistic Trader renovations as soon as depreciation updates.
     process_opportunistic_renovations(game);
     
-    // ============================================
     // 5. ROUND-BASED TRIGGERS
-    // ============================================
     int round = game->round_number;
     
     // Every 10 rounds: Inflation, Disasters, Market Review
@@ -917,9 +892,8 @@ void end_of_round_processing(GameState* game) {
         process_government_regulation(game);
     }
     
-    // ============================================
     // 6. BANKRUPTCY CHECK
-    // ============================================
+
     printf("\n[6] Checking Bankruptcy Status...\n");
     for (int i = 0; i < MAX_PLAYERS; i++) {
         Player* player = &game->players[i];
@@ -929,14 +903,13 @@ void end_of_round_processing(GameState* game) {
                 // Try to resolve debt
                 printf("  %s has negative cash: LKR %d\n", 
                        player->player_name, player->cash);
-                // TODO: Asset liquidation
             }
             
             // Check if player is bankrupt (no cash, no properties, no income)
             if (player->cash <= 0 && player->owned_property_count == 0) {
-                // Check if they have any income sources
+
                 int has_income = 0;
-                // TODO: Check railways, utilities, event income
+
                 if (!has_income) {
                     declare_bankruptcy(game, player,
                                        "no cash, property, or income remains");
@@ -1021,7 +994,6 @@ void process_opportunistic_renovations(GameState* game) {
     }
 }
 
-// Helper function to buy property
 void buy_property(Player* player, Property* prop, GameState* game) {
     if (player == NULL || prop == NULL) return;
     (void)game;
@@ -1043,7 +1015,6 @@ void buy_property(Player* player, Property* prop, GameState* game) {
 }
 
 // Shared auction controller for ordinary Bank, bankruptcy and foreclosure
-// auctions. A special auction may exclude the former owner.
 static void run_auction(GameState* game, Property* prop,
                         const char* reason, int excluded_player_id) {
     if (game == NULL || prop == NULL) return;
@@ -1095,8 +1066,6 @@ static void run_auction(GameState* game, Property* prop,
 
             int proposed_bid = get_auction_bid(bidder, prop, current_bid);
 
-            // The controller enforces the rules even if a strategy returns an
-            // invalid amount: minimum increment, available cash, no loans.
             if (proposed_bid >= current_bid + 250 &&
                 proposed_bid <= bidder->cash) {
                 current_bid = proposed_bid;
@@ -1116,7 +1085,6 @@ static void run_auction(GameState* game, Property* prop,
             break;
         }
 
-        // No bid in a complete pass means no remaining player can advance it.
         if (bids_this_pass == 0) {
             break;
         }
