@@ -143,6 +143,7 @@ void init_game(GameState* game) {
         game->players[i].total_rent_collected = 0;
         game->players[i].total_expenses_paid = 0;
         game->players[i].auction_wins = 0;
+        game->players[i].has_experienced_financial_loss = 0;
     }
     
     printf("Game initialized successfully.\n");
@@ -948,12 +949,15 @@ void process_strategy_development(GameState* game, Player* player) {
     if (game == NULL || player == NULL) return;
     if (player->is_bankrupt) return;
     if (player->strategy != STRATEGY_AGGRESSIVE &&
-        player->strategy != STRATEGY_CONSERVATIVE) return;
+        player->strategy != STRATEGY_CONSERVATIVE &&
+        player->strategy != STRATEGY_RISK_TAKER) return;
 
     if (player->strategy == STRATEGY_AGGRESSIVE) {
         printf("\n  Aggressive Investor development check...\n");
-    } else {
+    } else if (player->strategy == STRATEGY_CONSERVATIVE) {
         printf("\n  Conservative Banker development check...\n");
+    } else {
+        printf("\n  Risk Taker development check...\n");
     }
 
     // Keep building legal houses until cash or the building rules stop us.

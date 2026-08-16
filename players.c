@@ -1311,14 +1311,8 @@ int risk_taker_should_insure(Player* player, int property_index) {
     if (prop->building_count == 0) return 0;
     
     // Risk Taker Rule:
-    // Purchases insurance only after experiencing a financial loss
-    // For now, check if player has ever suffered a disaster loss
-    // This could be tracked in player struct with a flag like 'has_suffered_loss'
-    
-    // Simplified: Risk Taker never buys insurance proactively
-    // They only buy if they've already lost money to a disaster
-    // Since we don't track losses yet, they never buy
-    return 0;
+    // Purchase insurance only after an out-of-pocket disaster loss.
+    return player->has_experienced_financial_loss;
 }
 
 int risk_taker_should_renovate(Player* player, int property_index) {

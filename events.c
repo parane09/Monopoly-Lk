@@ -595,6 +595,13 @@ void check_disaster(GameState* game) {
     int compensation = process_disaster_claim(
         prop, damage, disaster, game);
 
+    // A Risk Taker starts considering insurance after personally suffering
+    // an out-of-pocket disaster loss. Keep this as a permanent experience
+    // flag so it remains true after the repair is eventually paid.
+    if (owner->strategy == STRATEGY_RISK_TAKER && compensation < damage) {
+        owner->has_experienced_financial_loss = 1;
+    }
+
     // Compensation is credited before the automatic repair attempt.
     if (compensation > 0) {
         owner->cash += compensation;

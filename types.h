@@ -188,6 +188,7 @@ typedef struct {
     int total_rent_collected;
     int total_expenses_paid;
     int auction_wins;
+    int has_experienced_financial_loss;
     
 } Player;
 
