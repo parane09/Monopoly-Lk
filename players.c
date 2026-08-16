@@ -7,8 +7,42 @@
 // FORWARD DECLARATIONS
 // ============================================
 
+// Live game state used by strategy calculations. This is a pointer so event
+// and market changes are visible immediately rather than copied and outdated.
+static GameState* strategy_game_state = NULL;
+
 // Helper functions
 static int calculate_roi(Player* player, Property* prop);
+static int get_adjusted_market_value(Player* player, Property* prop);
+
+void set_player_game_state(GameState* game) {
+    strategy_game_state = game;
+}
+
+int get_adjusted_purchase_price(Player* player, Property* prop) {
+    if (prop == NULL) return 0;
+
+    int price = get_property_value(prop);
+    if (strategy_game_state == NULL || player == NULL) return price;
+
+    price = apply_event_value_modifiers(
+        prop, strategy_game_state, player->player_id, price);
+    price = apply_market_purchase_modifier(
+        prop, strategy_game_state, price);
+    return price;
+}
+
+static int get_adjusted_market_value(Player* player, Property* prop) {
+    if (prop == NULL) return 0;
+
+    int value = get_property_value(prop);
+    if (strategy_game_state == NULL || player == NULL) return value;
+
+    value = apply_event_value_modifiers(
+        prop, strategy_game_state, player->player_id, value);
+    value = apply_market_value_modifier(prop, strategy_game_state, value);
+    return value;
+}
 
 // ============================================
 // INTERNAL HELPER FUNCTIONS
@@ -276,7 +310,9 @@ int aggressive_should_buy(Player* player, Property* prop) {
     // Check if property is unowned (AI should only be called for unowned properties)
     if (prop->owner_id != -1) return 0;
 
-    if(player->cash < prop->purchase_price){
+    int purchase_price = get_adjusted_purchase_price(player, prop);
+
+    if(player->cash < purchase_price){
         return 0;
     }
 
@@ -286,7 +322,7 @@ int aggressive_should_buy(Player* player, Property* prop) {
     }
 
     // Can we afford purchase AND still have at least LKR 500 left for rent?
-    if (player->cash < prop->purchase_price + 500) {
+    if (player->cash < purchase_price + 500) {
         return 0;
     }
     return 1;
@@ -301,7 +337,8 @@ int aggressive_auction_bid(Player* player, Property* prop, int current_bid) {
     if (current_bid >= player->cash) return -1;
     
     // Calculate maximum bid: 120% of property purchase price
-    int max_bid = (prop->purchase_price * 120) / 100;
+    int estimated_value = get_adjusted_market_value(player, prop);
+    int max_bid = (estimated_value * 120) / 100;
     
     // Rule-LK 20: increase the current bid by the minimum LKR 250.
     int next_bid = current_bid + 250;
@@ -333,8 +370,10 @@ int aggressive_should_loan(Player* player) {
         if (prop->owner_id == -1) {
             if (would_complete_monopoly(player, prop->color_group)) {
                 // Can we afford the property with loan + cash?
-                if (player->cash < prop->purchase_price &&
-                    player->cash + max_loan >= prop->purchase_price) {
+                int purchase_price =
+                    get_adjusted_purchase_price(player, prop);
+                if (player->cash < purchase_price &&
+                    player->cash + max_loan >= purchase_price) {
                     return 1;
                 }
             }
@@ -402,7 +441,8 @@ int aggressive_loan_amount(Player* player) {
 
         if (prop->owner_id == -1 && is_developable_group &&
             would_complete_monopoly(player, prop->color_group)) {
-            int shortfall = prop->purchase_price - player->cash;
+            int purchase_price = get_adjusted_purchase_price(player, prop);
+            int shortfall = purchase_price - player->cash;
 
             if (shortfall > 0 && shortfall <= max_loan &&
                 (best_shortfall == 0 || shortfall < best_shortfall)) {
@@ -683,9 +723,11 @@ int conservative_should_buy(Player* player, Property* prop) {
     // Check if player somehow already owns this property
     if (prop->owner_id == player->player_id) return 0;
 
+    int purchase_price = get_adjusted_purchase_price(player, prop);
+
         // PREFERENCE: Railways and Utilities (predictable income)
     if (prop->color_group == GROUP_RAILWAY || prop->color_group == GROUP_UTILITY) {
-        if(player->cash > prop->purchase_price){
+        if(player->cash > purchase_price){
             return 1;
         }  // High priority
     }
@@ -693,7 +735,7 @@ int conservative_should_buy(Player* player, Property* prop) {
     // Conservative Banker Rule:
     // After purchase, at least 50% of current cash must remain
     int cash_before = player->cash;
-    int cash_after = cash_before - prop->purchase_price;
+    int cash_after = cash_before - purchase_price;
     
     // Need at least 50% of cash to remain
     if (cash_after < cash_before / 2) {
@@ -714,7 +756,7 @@ int conservative_auction_bid(Player* player, Property* prop, int current_bid) {
     // Conservative Banker Rule:
     // Maximum bid is the property's purchase price (market value)
     // Will NEVER bid above market value
-    int max_bid = prop->purchase_price;
+    int max_bid = get_adjusted_market_value(player, prop);
     
     // Also apply the 50% cash rule from buying
     // After winning auction, at least 50% cash must remain
@@ -1037,7 +1079,8 @@ int risk_taker_should_buy(Player* player, Property* prop) {
     // No cash reserve requirement - can leave LKR 0
     
     // Check if player can afford the property (at minimum)
-    if (player->cash >= prop->purchase_price) {
+    int purchase_price = get_adjusted_purchase_price(player, prop);
+    if (player->cash >= purchase_price) {
         return 1;  // Buy it!
     }
     
@@ -1276,7 +1319,7 @@ static int calculate_roi(Player* player, Property* prop) {
     if (player == NULL || prop == NULL) return 0;
     if (prop->owner_id != -1) return 0;
     
-    int cost = prop->purchase_price;
+    int cost = get_adjusted_purchase_price(player, prop);
     int annual_rent = prop->base_rent * 10;  // Estimate 10 visits per round
     
     // If completing a monopoly, rent doubles
@@ -1299,7 +1342,8 @@ int opportunistic_should_buy(Player* player, Property* prop) {
     int roi = calculate_roi(player, prop);
     
     // Also check if can afford
-    if (player->cash < prop->purchase_price) return 0;
+    int purchase_price = get_adjusted_purchase_price(player, prop);
+    if (player->cash < purchase_price) return 0;
     
     // Buy if ROI > 10% (good investment)
     if (roi > 10) {
@@ -1332,11 +1376,13 @@ int opportunistic_auction_bid(Player* player, Property* prop, int current_bid) {
     int max_bid = 0;
     
     if (roi > 20) {
-        max_bid = (prop->purchase_price * 110) / 100;
+        int estimated_value = get_adjusted_market_value(player, prop);
+        max_bid = (estimated_value * 110) / 100;
     } else if (roi > 15) {
-        max_bid = (prop->purchase_price * 105) / 100;
+        int estimated_value = get_adjusted_market_value(player, prop);
+        max_bid = (estimated_value * 105) / 100;
     } else if (roi > 10) {
-        max_bid = prop->purchase_price;
+        max_bid = get_adjusted_market_value(player, prop);
     } else {
         return -1;  // ROI too low, withdraw
     }
@@ -1386,7 +1432,9 @@ int opportunistic_should_loan(Player* player) {
         Property* prop = &property_array[i];
         if (prop->owner_id == -1) {
             if (would_complete_monopoly(player, prop->color_group)) {
-                if (player->cash + max_loan >= prop->purchase_price) {
+                int purchase_price =
+                    get_adjusted_purchase_price(player, prop);
+                if (player->cash + max_loan >= purchase_price) {
                     return 1;
                 }
             }

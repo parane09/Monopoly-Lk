@@ -374,6 +374,8 @@ void process_aggressive_development(GameState* game, Player* player);
 
 
 // players.c - AI Strategy Prototypes
+void set_player_game_state(GameState* game);
+int get_adjusted_purchase_price(Player* player, Property* prop);
 int should_buy_property(Player* player, Property* prop);
 int get_auction_bid(Player* player, Property* prop, int current_bid);
 int should_take_loan(Player* player);

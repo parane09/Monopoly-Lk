@@ -17,6 +17,7 @@
 
 
 void init_game(GameState* game) {
+    set_player_game_state(game);
     // initialize the board with all the data
     init_board_data();
     init_event_deck();
@@ -510,8 +511,10 @@ void resolve_landing(GameState* game, Player* player) {
             }
             
             if (prop->owner_id == -1) {
+                int displayed_price =
+                    get_adjusted_purchase_price(player, prop);
                 printf("  %s is available for LKR %d.\n",
-                       prop->property_name, prop->purchase_price);
+                       prop->property_name, displayed_price);
 
                 if (!can_purchase_under_regulation(player, game)) {
                     printf("  Purchase blocked by the Anti-Speculation Act.\n");
@@ -562,8 +565,10 @@ void resolve_landing(GameState* game, Player* player) {
             
             // Check if unowned
             if (prop->owner_id == -1) {
+                int displayed_price =
+                    get_adjusted_purchase_price(player, prop);
                 printf("  %s is available for LKR %d.\n", 
-                       prop->property_name, prop->purchase_price);
+                       prop->property_name, displayed_price);
                 
                 if (!can_purchase_under_regulation(player, game)) {
                     printf("  Purchase blocked by the Anti-Speculation Act.\n");
@@ -628,8 +633,10 @@ void resolve_landing(GameState* game, Player* player) {
             
             // Check if unowned
             if (prop->owner_id == -1) {
+                int displayed_price =
+                    get_adjusted_purchase_price(player, prop);
                 printf("  %s is available for LKR %d.\n", 
-                       prop->property_name, prop->purchase_price);
+                       prop->property_name, displayed_price);
                 
                 if (!can_purchase_under_regulation(player, game)) {
                     printf("  Purchase blocked by the Anti-Speculation Act.\n");
@@ -968,10 +975,7 @@ void process_aggressive_development(GameState* game, Player* player) {
 void buy_property(Player* player, Property* prop, GameState* game) {
     if (player == NULL || prop == NULL) return;
 
-    int purchase_price = get_property_value(prop);
-    purchase_price = apply_event_value_modifiers(
-        prop, game, player->player_id, purchase_price);
-    purchase_price = apply_market_purchase_modifier(prop, game, purchase_price);
+    int purchase_price = get_adjusted_purchase_price(player, prop);
 
     if (player->cash < purchase_price) return;
 
