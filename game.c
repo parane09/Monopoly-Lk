@@ -450,6 +450,9 @@ int determine_first_player(GameState* game){
 void process_turn(GameState* game, Player* player){
     printf("\n  %s's turn:\n", player->player_name);
 
+    // Rule-LK 27 permits maintenance only at the beginning of a turn.
+    process_beginning_turn_maintenance(player);
+
     DiceRoll diceroll = roll_dice();
     player->last_dice_total = diceroll.total;
     printf("    Rolled: %d\n", diceroll.total);
@@ -470,6 +473,22 @@ void process_turn(GameState* game, Player* player){
     printf("    Cash: LKR %d\n", player->cash);
 
     resolve_landing(game, player);
+}
+
+void process_beginning_turn_maintenance(Player* player) {
+    if (player == NULL || player->is_bankrupt) return;
+
+    for (int i = 0; i < player->owned_property_count; i++) {
+        int property_index = player->owned_property_indices[i];
+        if (property_index < 0 || property_index >= MAX_PROPERTIES) continue;
+
+        Property* prop = &property_array[property_index];
+        if (prop->building_count == 0) continue;
+
+        if (should_perform_maintenance(player, property_index)) {
+            perform_maintenance(player, property_index);
+        }
+    }
 }
 
 

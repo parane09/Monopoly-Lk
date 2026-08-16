@@ -373,6 +373,7 @@ void buy_property(Player* player, Property* prop, GameState* game);
 void start_auction(GameState* game, Property* prop);
 void process_strategy_development(GameState* game, Player* player);
 void process_opportunistic_renovations(GameState* game);
+void process_beginning_turn_maintenance(Player* player);
 
 
 // players.c - AI Strategy Prototypes
@@ -392,6 +393,7 @@ int choose_hotel_property(Player* player);
 int should_buy_insurance(Player* player, int property_index);
 int get_insurance_type(Player* player, int property_index);
 int should_renovate(Player* player, int property_index);
+int should_perform_maintenance(Player* player, int property_index);
 
 // players.c - Aggressive Investor strategy
 int aggressive_should_buy(Player* player, Property* prop);
@@ -405,6 +407,7 @@ int aggressive_should_hotel(Player* player);
 int aggressive_choose_hotel(Player* player);
 int aggressive_insurance_type(Player* player, int property_index);
 int aggressive_should_renovate(Player* player, int property_index);
+int aggressive_should_maintain(Player* player, int property_index);
 
 // players.c - Conservative Banker strategy
 int conservative_should_buy(Player* player, Property* prop);
@@ -418,6 +421,7 @@ int conservative_should_hotel(Player* player);
 int conservative_choose_hotel(Player* player);
 int conservative_should_insure(Player* player, int property_index);
 int conservative_should_renovate(Player* player, int property_index);
+int conservative_should_maintain(Player* player, int property_index);
 
 // players.c - Risk Taker strategy
 int risk_taker_should_buy(Player* player, Property* prop);
@@ -431,6 +435,7 @@ int risk_taker_should_hotel(Player* player);
 int risk_taker_choose_hotel(Player* player);
 int risk_taker_should_insure(Player* player, int property_index);
 int risk_taker_should_renovate(Player* player, int property_index);
+int risk_taker_should_maintain(Player* player, int property_index);
 
 // players.c - Opportunistic Trader strategy
 int opportunistic_should_buy(Player* player, Property* prop);
@@ -444,6 +449,7 @@ int opportunistic_should_hotel(Player* player);
 int opportunistic_choose_hotel(Player* player);
 int opportunistic_should_insure(Player* player, int property_index);
 int opportunistic_should_renovate(Player* player, int property_index);
+int opportunistic_should_maintain(Player* player, int property_index);
 
 
 // events.c prototypes

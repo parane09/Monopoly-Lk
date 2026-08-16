@@ -308,6 +308,88 @@ int should_renovate(Player* player, int property_index) {
     }
 }
 
+int should_perform_maintenance(Player* player, int property_index) {
+    if (player == NULL || player->is_bankrupt) return 0;
+    if (property_index < 0 || property_index >= MAX_PROPERTIES) return 0;
+
+    switch (player->strategy) {
+        case STRATEGY_AGGRESSIVE:
+            return aggressive_should_maintain(player, property_index);
+        case STRATEGY_CONSERVATIVE:
+            return conservative_should_maintain(player, property_index);
+        case STRATEGY_RISK_TAKER:
+            return risk_taker_should_maintain(player, property_index);
+        case STRATEGY_OPPORTUNISTIC:
+            return opportunistic_should_maintain(player, property_index);
+        default:
+            return 0;
+    }
+}
+
+int aggressive_should_maintain(Player* player, int property_index) {
+    if (player == NULL || property_index < 0 ||
+        property_index >= MAX_PROPERTIES) return 0;
+
+    Property* prop = &property_array[property_index];
+    if (prop->owner_id != player->player_id || prop->building_count == 0)
+        return 0;
+
+    int cost = get_maintenance_cost(prop);
+    return prop->condition_percentage < 75 && cost <= player->cash;
+}
+
+int conservative_should_maintain(Player* player, int property_index) {
+    if (player == NULL || property_index < 0 ||
+        property_index >= MAX_PROPERTIES) return 0;
+
+    Property* prop = &property_array[property_index];
+    if (prop->owner_id != player->player_id || prop->building_count == 0)
+        return 0;
+
+    int cost = get_maintenance_cost(prop);
+    int cash_after = player->cash - cost;
+    return prop->condition_percentage < 90 && cash_after >= 5000;
+}
+
+int risk_taker_should_maintain(Player* player, int property_index) {
+    if (player == NULL || property_index < 0 ||
+        property_index >= MAX_PROPERTIES) return 0;
+
+    Property* prop = &property_array[property_index];
+    if (prop->owner_id != player->player_id || prop->building_count == 0)
+        return 0;
+
+    int cost = get_maintenance_cost(prop);
+    return prop->condition_percentage < 25 && cost <= player->cash;
+}
+
+int opportunistic_should_maintain(Player* player, int property_index) {
+    if (player == NULL || property_index < 0 ||
+        property_index >= MAX_PROPERTIES) return 0;
+
+    Property* prop = &property_array[property_index];
+    if (prop->owner_id != player->player_id || prop->building_count == 0)
+        return 0;
+    if (prop->condition_percentage == 100) return 0;
+
+    int cost = get_maintenance_cost(prop);
+    if (cost > player->cash) return 0;
+
+    int current_rent = calculate_rent_with_buildings(prop);
+    int restored_rent =
+        prop->base_rent * get_building_multiplier(prop->building_count);
+
+    if (strategy_game_state != NULL) {
+        current_rent = apply_event_rent_modifiers(
+            prop, strategy_game_state, player->player_id, current_rent);
+        restored_rent = apply_event_rent_modifiers(
+            prop, strategy_game_state, player->player_id, restored_rent);
+    }
+
+    int projected_extra_rent = (restored_rent - current_rent) * 10;
+    return projected_extra_rent > cost;
+}
+
 // Add this to the helpers section at the top of players.c
 static int would_complete_monopoly(Player* player, PropertyGroup group) {
     if (player == NULL) return 0;
