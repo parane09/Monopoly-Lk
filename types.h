@@ -77,8 +77,10 @@ typedef enum {
     INSURANCE_BUSINESS 
 } InsurancePolicy;
 
-// Stores the complete result of rolling two dice. Keeping the individual
-// values makes doubles available for jail and consecutive-doubles rules.
+// ============================================
+// STRUCTS
+// ============================================
+
 typedef struct {
     int first_die;
     int second_die;
@@ -86,11 +88,6 @@ typedef struct {
     int is_double;
 } DiceRoll;
 
-// ============================================
-// STRUCTS
-// ============================================
-
-// Property structure - represents a purchasable asset
 typedef struct {
     char property_name[50];
     
@@ -133,7 +130,6 @@ typedef struct {
     
 } Property;
 
-// Square structure - represents a position on the board
 typedef struct {
     int square_index;          // 0-39
     char square_name[50];
@@ -141,7 +137,6 @@ typedef struct {
     int property_index;        // -1 if not a property, else index into properties array
 } Square;
 
-// Loan structure
 typedef struct {
     int is_active;             // 0 = no, 1 = yes
     int current_amount;
@@ -155,7 +150,6 @@ typedef struct {
     int collateral_count;
 } Loan;
 
-// Player structure
 typedef struct {
     int player_id;             // 0-3
     char player_name[30];
@@ -192,7 +186,6 @@ typedef struct {
     
 } Player;
 
-// Active event tracking structure (nested inside GameState)
 typedef struct {
     int is_active;
     char event_name[50];
@@ -202,7 +195,6 @@ typedef struct {
     int started_round;
 } ActiveEvent;
 
-// Regional development tracking structure (NEW)
 typedef struct {
     int is_active;
     char event_name[50];
@@ -213,7 +205,6 @@ typedef struct {
     int started_round;
 } RegionalDevelopment;
 
-// Active regulation tracking
 typedef struct {
     int is_active;
     char regulation_name[50];
@@ -222,7 +213,6 @@ typedef struct {
     int started_round;
 } ActiveRegulation;
 
-// Market boom/decline tracking
 typedef struct {
     int is_active;
     char group_name[50];
@@ -232,7 +222,6 @@ typedef struct {
     int started_round;
 } MarketCondition;
 
-// Game state structure - overall game data
 typedef struct {
     int round_number;
     int current_player_index;
@@ -319,8 +308,7 @@ void unlock_collateral(Player* player);
 int calculate_insurance_premium(Property* prop, int policy_type);
 int buy_insurance(Player* player, int property_index, int policy_type, GameState* game);
 void process_insurance_expiry(Property* prop, int current_round);
-int process_disaster_claim(Property* prop, int damage_cost,
-                           const char* disaster_type, GameState* game);
+int process_disaster_claim(Property* prop, int damage_cost, const char* disaster_type, GameState* game);
 int has_active_insurance(Property* prop);
 int get_insurance_reminder(Property* prop);
 const char* get_insurance_policy_name(int policy_type);
@@ -372,8 +360,7 @@ void process_regional_development(GameState* game);
 void process_government_regulation(GameState* game);
 void buy_property(Player* player, Property* prop, GameState* game);
 void start_auction(GameState* game, Property* prop);
-void start_special_auction(GameState* game, Property* prop,
-                           const char* reason, int excluded_player_id);
+void start_special_auction(GameState* game, Property* prop, const char* reason, int excluded_player_id);
 void process_strategy_development(GameState* game, Player* player);
 void process_opportunistic_renovations(GameState* game);
 void process_beginning_turn_maintenance(Player* player);
@@ -467,12 +454,9 @@ void check_disaster(GameState* game);
 void update_event_durations(GameState* game);
 void print_current_market_conditions(GameState* game);
 // events.c - Event effect prototypes
-int apply_event_rent_modifiers(Property* prop, GameState* game,
-                               int player_id, int current_rent);
-int apply_event_value_modifiers(Property* prop, GameState* game,
-                                int player_id, int current_value);
-int apply_event_construction_modifiers(Property* prop, int cost,
-                                       GameState* game, int player_id);
+int apply_event_rent_modifiers(Property* prop, GameState* game, int player_id, int current_rent);
+int apply_event_value_modifiers(Property* prop, GameState* game, int player_id, int current_value);
+int apply_event_construction_modifiers(Property* prop, int cost, GameState* game, int player_id);
 int apply_event_insurance_modifiers(int premium, GameState* game, int player_id);
 int apply_event_interest_modifiers(int rate, GameState* game, int player_id);
 int is_event_construction_suspended(GameState* game, int player_id);
